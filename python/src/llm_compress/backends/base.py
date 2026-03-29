@@ -4,7 +4,8 @@ All inference backends must implement this interface.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 
 class BaseBackend(ABC):
@@ -13,7 +14,7 @@ class BaseBackend(ABC):
     All backends (vLLM, llama.cpp) must implement this interface
     to be used by the API server.
     """
-    
+
     def __init__(self, model_id: str, **kwargs: Any) -> None:
         """Initialize the backend.
         
@@ -23,12 +24,12 @@ class BaseBackend(ABC):
         """
         self.model_id = model_id
         self.config = kwargs
-    
+
     @abstractmethod
     def initialize(self) -> None:
         """Initialize the backend and load the model."""
         pass
-    
+
     @abstractmethod
     def health(self) -> dict[str, Any]:
         """Return backend health status.
@@ -37,7 +38,7 @@ class BaseBackend(ABC):
             Dictionary with status information
         """
         pass
-    
+
     @abstractmethod
     def generate(
         self,
@@ -62,7 +63,7 @@ class BaseBackend(ABC):
             Generated completion (dict) or stream of chunks (iterator)
         """
         pass
-    
+
     @abstractmethod
     def chat(
         self,
@@ -87,7 +88,7 @@ class BaseBackend(ABC):
             Generated completion (dict) or stream of chunks (iterator)
         """
         pass
-    
+
     @abstractmethod
     def shutdown(self) -> None:
         """Shutdown the backend and release resources."""

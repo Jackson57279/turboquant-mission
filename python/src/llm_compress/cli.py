@@ -5,6 +5,7 @@ including commands for downloading, quantizing, and serving LLMs.
 """
 
 import click
+
 from llm_compress import __version__
 
 
@@ -19,7 +20,7 @@ def _format_size(size_bytes: int) -> str:
     """
     if size_bytes == 0:
         return "0 B"
-    
+
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if abs(size_bytes) < 1024.0:
             return f"{size_bytes:.1f} {unit}"
@@ -65,8 +66,8 @@ def download(model_id: str, cache_dir: str | None, token: str | None) -> None:
     
     MODEL_ID is the HuggingFace model identifier (e.g., meta-llama/Llama-2-7b-hf).
     """
-    from llm_compress.download import download_model, DownloadError
-    
+    from llm_compress.download import DownloadError, download_model
+
     try:
         model_path = download_model(
             model_id=model_id,
@@ -113,29 +114,29 @@ def quantize(model_id: str, bits: str, kv_cache: bool, cache_dir: str | None) ->
         llm-compress quantize microsoft/DialoGPT-medium --bits 4
         llm-compress quantize meta-llama/Llama-2-7b-hf --bits 8 --kv-cache
     """
-    from llm_compress.quantization.weight import quantize_model, get_compression_ratio
-    from llm_compress.download import is_model_cached, get_model_dir
-    from pathlib import Path
     import time
-    
+
+    from llm_compress.download import is_model_cached
+    from llm_compress.quantization.weight import get_compression_ratio, quantize_model
+
     # Check if model is downloaded
     if not is_model_cached(model_id, cache_dir=cache_dir):
         raise click.ClickException(
             f"Model '{model_id}' not found in cache. "
             f"Please download it first with: llm-compress download {model_id}"
         )
-    
+
     bits_int = int(bits)
-    
+
     click.echo(f"Quantizing {model_id} to {bits}-bit weights...")
-    
+
     if kv_cache:
         click.echo("KV cache quantization enabled (3-bit keys, 2-bit values)")
-    
+
     # Show progress
     click.echo("Loading model and preparing quantization...")
     start_time = time.time()
-    
+
     try:
         # Perform quantization
         output_dir = quantize_model(
@@ -143,13 +144,13 @@ def quantize(model_id: str, bits: str, kv_cache: bool, cache_dir: str | None) ->
             bits=bits_int,
             cache_dir=cache_dir,
         )
-        
+
         # Calculate compression ratio
         compression_ratio = get_compression_ratio(output_dir)
-        
+
         # Calculate elapsed time
         elapsed_time = time.time() - start_time
-        
+
         # Output results
         click.echo()
         click.echo("✓ Quantization complete!")
@@ -160,9 +161,9 @@ def quantize(model_id: str, bits: str, kv_cache: bool, cache_dir: str | None) ->
         click.echo(f"  Time: {elapsed_time:.1f}s")
         click.echo(f"  Output: {output_dir}")
         click.echo()
-        click.echo(f"To serve this model, run:")
+        click.echo("To serve this model, run:")
         click.echo(f"  llm-compress serve {model_id}")
-        
+
     except ValueError as e:
         raise click.ClickException(str(e))
     except Exception as e:
@@ -215,32 +216,33 @@ def list(cache_dir: str | None) -> None:
     Displays a table showing model IDs, sizes, and download dates.
     Shows a friendly message if the cache is empty.
     """
-    from llm_compress.download import list_cached_models, get_cache_dir
     from pathlib import Path
-    
+
+    from llm_compress.download import get_cache_dir, list_cached_models
+
     cache_path = get_cache_dir(cache_dir)
     models = list_cached_models(cache_dir=cache_path)
-    
+
     if not models:
         click.echo("No models found in cache.")
         click.echo(f"Cache directory: {cache_path}")
         click.echo("Use 'llm-compress download <model_id>' to download a model.")
         return
-    
+
     # Calculate column widths
     max_id_len = max(len(m.get("model_id", "")) for m in models)
     max_id_len = max(max_id_len, len("MODEL ID"))
-    
+
     # Header
     click.echo(f"{'MODEL ID':<{max_id_len}}  {'SIZE':>10}  {'FILES':>6}  {'DOWNLOADED':>12}")
     click.echo("-" * (max_id_len + 10 + 6 + 12 + 6))
-    
+
     # Rows
     for model in models:
         model_id = model.get("model_id", "unknown")
         local_path = model.get("local_path")
         files_downloaded = model.get("files_downloaded", 0)
-        
+
         # Calculate size
         total_size = 0
         if local_path:
@@ -249,10 +251,10 @@ def list(cache_dir: str | None) -> None:
                 for item in path.rglob("*"):
                     if item.is_file():
                         total_size += item.stat().st_size
-        
+
         size_str = _format_size(total_size)
         click.echo(f"{model_id:<{max_id_len}}  {size_str:>10}  {files_downloaded:>6}  {'--':>12}")
-    
+
     click.echo()
     click.echo(f"Cache directory: {cache_path}")
     click.echo(f"Total models: {len(models)}")
@@ -282,15 +284,15 @@ def remove(model_id: str, cache_dir: str | None, force: bool) -> None:
         llm-compress remove microsoft/DialoGPT-medium
         llm-compress remove microsoft/DialoGPT-medium --force
     """
-    from llm_compress.download import remove_cached_model, DownloadError, is_model_cached
-    
+    from llm_compress.download import DownloadError, is_model_cached, remove_cached_model
+
     # Check if model exists before confirming
     if not is_model_cached(model_id, cache_dir=cache_dir):
         raise click.ClickException(f"Model '{model_id}' not found in cache.")
-    
+
     if not force:
         click.confirm(f"Remove '{model_id}' from cache?", abort=True)
-    
+
     try:
         remove_cached_model(model_id, cache_dir=cache_dir)
         click.echo(f"Model '{model_id}' removed successfully.")

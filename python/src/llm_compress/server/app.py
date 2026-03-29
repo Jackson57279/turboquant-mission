@@ -3,8 +3,8 @@
 This module creates the OpenAI-compatible API server.
 """
 
+
 from fastapi import FastAPI
-from typing import Any
 
 
 def create_app(model_id: str, backend: str = "vllm") -> FastAPI:
@@ -25,10 +25,10 @@ def create_app(model_id: str, backend: str = "vllm") -> FastAPI:
         description="OpenAI-compatible API for quantized LLMs",
         version="0.1.0",
     )
-    
+
     @app.get("/health")
     async def health() -> dict[str, str]:
         """Health check endpoint."""
         return {"status": "healthy"}
-    
+
     return app

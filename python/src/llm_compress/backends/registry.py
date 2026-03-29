@@ -6,13 +6,12 @@ This module provides backend discovery and instantiation.
 from typing import Any
 
 from llm_compress.backends.base import BaseBackend
-from llm_compress.backends.vllm import VLLM_AVAILABLE, VLLMBackend, VLLMBackendStub
 from llm_compress.backends.llama_cpp import (
     LLAMA_CPP_AVAILABLE,
     LlamaCppBackend,
     LlamaCppBackendStub,
 )
-
+from llm_compress.backends.vllm import VLLM_AVAILABLE, VLLMBackend, VLLMBackendStub
 
 _BACKENDS: dict[str, type[BaseBackend]] = {}
 
@@ -49,7 +48,7 @@ def get_backend(name: str, model_id: str, **kwargs: Any) -> BaseBackend:
         raise ValueError(
             f"Unknown backend: {name}. Available: {list(_BACKENDS.keys())}"
         )
-    
+
     backend_class = _BACKENDS[name]
     return backend_class(model_id, **kwargs)
 

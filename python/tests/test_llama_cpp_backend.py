@@ -11,8 +11,7 @@ These tests verify:
 """
 
 import os
-import tempfile
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -33,7 +32,7 @@ class TestGGUFConverter:
             model_id="microsoft/DialoGPT-medium",
             quantization_type="Q4_K_M",
         )
-        
+
         assert converter.model_id == "microsoft/DialoGPT-medium"
         assert converter.quantization_type == "Q4_K_M"
         assert os.path.exists(converter.output_dir)
@@ -41,7 +40,7 @@ class TestGGUFConverter:
     def test_quantization_mapping(self):
         """Test quantization type mapping."""
         converter = GGUFConverter("test/model")
-        
+
         assert converter._map_quantization_to_outtype() == "q4_k_m"
         assert converter._map_quantization_to_outtype("Q8_0") == "q8_0"
         assert converter._map_quantization_to_outtype("F16") == "f16"
@@ -56,10 +55,10 @@ class TestGGUFConverter:
             "model-Q8_0.gguf",
         ]
         mock_download.return_value = "/tmp/model-Q4_K_M.gguf"
-        
+
         converter = GGUFConverter("microsoft/DialoGPT-medium", quantization_type="Q4_K_M")
         result = converter.find_preconverted_gguf()
-        
+
         assert result == "/tmp/model-Q4_K_M.gguf"
         mock_download.assert_called_once()
 
@@ -67,10 +66,10 @@ class TestGGUFConverter:
     def test_find_preconverted_gguf_not_found(self, mock_list_files):
         """Test when no pre-converted GGUF is found."""
         mock_list_files.side_effect = Exception("Repo not found")
-        
+
         converter = GGUFConverter("unknown/model")
         result = converter.find_preconverted_gguf()
-        
+
         assert result is None
 
     def test_find_preconverted_without_hf_available(self):
@@ -86,22 +85,22 @@ class TestLlamaCppBackendStub:
     def test_stub_initialization(self):
         """Test stub initialization."""
         stub = LlamaCppBackendStub("test-model")
-        
+
         assert stub.model_id == "test-model"
 
     def test_stub_initialize_raises_error(self):
         """Test that stub initialize raises informative error."""
         stub = LlamaCppBackendStub("test-model")
-        
+
         with pytest.raises(RuntimeError, match="llama-cpp-python is not installed"):
             stub.initialize()
 
     def test_stub_health_returns_unhealthy(self):
         """Test stub health returns unhealthy status."""
         stub = LlamaCppBackendStub("test-model")
-        
+
         health = stub.health()
-        
+
         assert health["status"] == "unhealthy"
         assert health["backend"] == "llama.cpp"
         assert health["llama_cpp_available"] is False
@@ -110,21 +109,21 @@ class TestLlamaCppBackendStub:
     def test_stub_generate_raises_error(self):
         """Test that stub generate raises error."""
         stub = LlamaCppBackendStub("test-model")
-        
+
         with pytest.raises(RuntimeError, match="llama-cpp-python is not installed"):
             stub.generate("test prompt")
 
     def test_stub_chat_raises_error(self):
         """Test that stub chat raises error."""
         stub = LlamaCppBackendStub("test-model")
-        
+
         with pytest.raises(RuntimeError, match="llama-cpp-python is not installed"):
             stub.chat([{"role": "user", "content": "hello"}])
 
     def test_stub_shutdown_is_noop(self):
         """Test that stub shutdown is a no-op."""
         stub = LlamaCppBackendStub("test-model")
-        
+
         # Should not raise
         stub.shutdown()
 
@@ -144,7 +143,7 @@ class TestLlamaCppBackend:
         mock_llama_class = mock_llama_cpp_env
         mock_llm_instance = MagicMock()
         mock_llama_class.return_value = mock_llm_instance
-        
+
         with patch("os.path.exists", return_value=True):
             backend = LlamaCppBackend(
                 model_id="/path/to/model.gguf",
@@ -152,11 +151,11 @@ class TestLlamaCppBackend:
                 n_threads=8,
             )
             backend.initialize()
-            
+
             assert backend._initialized is True
             assert backend.llm is not None
             mock_llama_class.assert_called_once()
-            
+
             # Verify initialization parameters
             call_kwargs = mock_llama_class.call_args[1]
             assert call_kwargs["model_path"] == "/path/to/model.gguf"
@@ -168,7 +167,7 @@ class TestLlamaCppBackend:
         mock_llama_class = mock_llama_cpp_env
         mock_llm_instance = MagicMock()
         mock_llama_class.return_value = mock_llm_instance
-        
+
         with patch("llm_compress.backends.llama_cpp.HF_AVAILABLE", True):
             with patch.object(GGUFConverter, "find_preconverted_gguf", return_value="/tmp/model.gguf"):
                 backend = LlamaCppBackend(
@@ -176,7 +175,7 @@ class TestLlamaCppBackend:
                     quantization="Q4_K_M",
                 )
                 backend.initialize()
-                
+
                 assert backend._initialized is True
                 assert backend.llm is not None
 
@@ -187,7 +186,7 @@ class TestLlamaCppBackend:
                 model_id="microsoft/DialoGPT-medium",  # Not a GGUF path
                 quantization="Q4_K_M",
             )
-            
+
             with pytest.raises(RuntimeError, match="HuggingFace libraries required"):
                 backend.initialize()
 
@@ -195,7 +194,7 @@ class TestLlamaCppBackend:
         """Test that initialization fails when llama-cpp-python not available."""
         with patch("llm_compress.backends.llama_cpp.LLAMA_CPP_AVAILABLE", False):
             backend = LlamaCppBackend("test-model")
-            
+
             with pytest.raises(RuntimeError, match="llama-cpp-python is not installed"):
                 backend.initialize()
 
@@ -206,13 +205,13 @@ class TestLlamaCppBackend:
         mock_llm_instance.n_vocab.return_value = 32000
         mock_llm_instance.n_ctx.return_value = 2048
         mock_llama_class.return_value = mock_llm_instance
-        
+
         with patch("os.path.exists", return_value=True):
             backend = LlamaCppBackend("/path/to/model.gguf")
             backend.initialize()
-            
+
             health = backend.health()
-            
+
             assert health["status"] == "healthy"
             assert health["backend"] == "llama.cpp"
             assert health["llama_cpp_available"] is True
@@ -224,9 +223,9 @@ class TestLlamaCppBackend:
         """Test health check when backend not initialized."""
         backend = LlamaCppBackend("test-model")
         # Don't initialize
-        
+
         health = backend.health()
-        
+
         assert health["status"] == "unhealthy"
         assert health["initialized"] is False
         assert "error" in health
@@ -240,13 +239,13 @@ class TestLlamaCppBackend:
             "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
         }
         mock_llama_class.return_value = mock_llm_instance
-        
+
         with patch("os.path.exists", return_value=True):
             backend = LlamaCppBackend("/path/to/model.gguf")
             backend.initialize()
-            
+
             result = backend.generate("Test prompt", max_tokens=50)
-            
+
             assert "choices" in result
             assert len(result["choices"]) == 1
             assert result["choices"][0]["text"] == "Generated text"
@@ -257,21 +256,21 @@ class TestLlamaCppBackend:
         """Test streaming generation."""
         mock_llama_class = mock_llama_cpp_env
         mock_llm_instance = MagicMock()
-        
+
         # Mock streaming output
         def mock_stream():
             yield {"choices": [{"text": "Hello"}]}
             yield {"choices": [{"text": " world"}]}
-        
+
         mock_llm_instance.create_completion.return_value = mock_stream()
         mock_llama_class.return_value = mock_llm_instance
-        
+
         with patch("os.path.exists", return_value=True):
             backend = LlamaCppBackend("/path/to/model.gguf")
             backend.initialize()
-            
+
             chunks = list(backend.generate("Test prompt", stream=True))
-            
+
             assert len(chunks) == 3  # 2 content chunks + 1 final chunk
             assert all("choices" in chunk for chunk in chunks)
 
@@ -284,14 +283,14 @@ class TestLlamaCppBackend:
             "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
         }
         mock_llama_class.return_value = mock_llm_instance
-        
+
         with patch("os.path.exists", return_value=True):
             backend = LlamaCppBackend("/path/to/model.gguf")
             backend.initialize()
-            
+
             messages = [{"role": "user", "content": "Hello"}]
             result = backend.chat(messages)
-            
+
             assert "choices" in result
             assert result["choices"][0]["message"]["role"] == "assistant"
             assert "Hello! How can I help?" in result["choices"][0]["message"]["content"]
@@ -300,21 +299,21 @@ class TestLlamaCppBackend:
         """Test streaming chat completion."""
         mock_llama_class = mock_llama_cpp_env
         mock_llm_instance = MagicMock()
-        
+
         # Mock streaming output
         def mock_stream():
             yield {"choices": [{"delta": {"role": "assistant", "content": "Hi"}}]}
             yield {"choices": [{"delta": {"content": " there"}}]}
-        
+
         mock_llm_instance.create_chat_completion.return_value = mock_stream()
         mock_llama_class.return_value = mock_llm_instance
-        
+
         with patch("os.path.exists", return_value=True):
             backend = LlamaCppBackend("/path/to/model.gguf")
             backend.initialize()
-            
+
             chunks = list(backend.chat([{"role": "user", "content": "Hello"}], stream=True))
-            
+
             assert len(chunks) == 3  # 2 content chunks + 1 final chunk
             assert all("choices" in chunk for chunk in chunks)
 
@@ -322,7 +321,7 @@ class TestLlamaCppBackend:
         """Test that generate raises error if not initialized."""
         backend = LlamaCppBackend("test-model")
         # Don't initialize
-        
+
         with pytest.raises(RuntimeError, match="Backend not initialized"):
             backend.generate("Test prompt")
 
@@ -330,7 +329,7 @@ class TestLlamaCppBackend:
         """Test that chat raises error if not initialized."""
         backend = LlamaCppBackend("test-model")
         # Don't initialize
-        
+
         with pytest.raises(RuntimeError, match="Backend not initialized"):
             backend.chat([{"role": "user", "content": "hello"}])
 
@@ -339,16 +338,16 @@ class TestLlamaCppBackend:
         mock_llama_class = mock_llama_cpp_env
         mock_llm_instance = MagicMock()
         mock_llama_class.return_value = mock_llm_instance
-        
+
         with patch("os.path.exists", return_value=True):
             backend = LlamaCppBackend("/path/to/model.gguf")
             backend.initialize()
-            
+
             assert backend._initialized is True
             assert backend.llm is not None
-            
+
             backend.shutdown()
-            
+
             assert backend._initialized is False
             assert backend.llm is None
 
@@ -362,7 +361,7 @@ class TestLlamaCppBackend:
             seed=42,
             verbose=True,
         )
-        
+
         assert backend.n_ctx == 4096
         assert backend.n_threads == 8
         assert backend.n_gpu_layers == 20
@@ -376,15 +375,15 @@ class TestLlamaCppIntegration:
     def test_backend_registration_with_registry(self):
         """Test that backend is properly registered."""
         from llm_compress.backends.registry import get_backend, list_backends
-        
+
         # llama.cpp should be in the list of backends
         backends = list_backends()
         assert "llama-cpp" in backends
-        
+
         # Should be able to get backend instance (will be stub if llama-cpp not available)
         backend = get_backend("llama-cpp", "test-model")
         assert backend is not None
-        
+
         if not LLAMA_CPP_AVAILABLE:
             assert isinstance(backend, LlamaCppBackendStub)
 
@@ -392,9 +391,9 @@ class TestLlamaCppIntegration:
         """Test error handling when llama-cpp-python is not installed."""
         with patch("llm_compress.backends.llama_cpp.LLAMA_CPP_AVAILABLE", False):
             from llm_compress.backends.llama_cpp import LlamaCppBackendStub
-            
+
             stub = LlamaCppBackendStub("test-model")
-            
+
             with pytest.raises(RuntimeError, match="llama-cpp-python is not installed"):
                 stub.initialize()
 
@@ -403,14 +402,20 @@ class TestLlamaCppIntegration:
         # Test .gguf extension detection
         backend = LlamaCppBackend("/path/to/model.gguf")
         assert backend._is_direct_gguf is True
-        
-        # Test with gguf_path parameter
-        backend2 = LlamaCppBackend("test-model", gguf_path="/path/to/model.gguf")
-        assert backend2._is_direct_gguf is True
-        
+
+        # Test with gguf_path parameter that exists
+        with patch("os.path.exists", return_value=True):
+            backend2 = LlamaCppBackend("test-model", gguf_path="/path/to/model.gguf")
+            assert backend2._is_direct_gguf is True
+
+        # Test with gguf_path that doesn't exist
+        with patch("os.path.exists", return_value=False):
+            backend3 = LlamaCppBackend("test-model", gguf_path="/nonexistent/model.gguf")
+            assert backend3._is_direct_gguf is False
+
         # Test HuggingFace model ID (not a GGUF path)
-        backend3 = LlamaCppBackend("microsoft/DialoGPT-medium")
-        assert backend3._is_direct_gguf is False
+        backend4 = LlamaCppBackend("microsoft/DialoGPT-medium")
+        assert backend4._is_direct_gguf is False
 
 
 # Run baseline tests if available
@@ -421,15 +426,15 @@ class TestLlamaCppWithRealInstallation:
     def test_llama_cpp_imports(self):
         """Test that llama-cpp-python can be imported."""
         from llama_cpp import Llama
-        
+
         assert hasattr(Llama, "create_completion")
         assert hasattr(Llama, "create_chat_completion")
 
     def test_backend_health_without_model(self):
         """Test health check without loading a model."""
         backend = LlamaCppBackend("test-model")
-        
+
         health = backend.health()
-        
+
         assert health["llama_cpp_available"] is True
         assert health["status"] == "unhealthy"  # Not initialized yet

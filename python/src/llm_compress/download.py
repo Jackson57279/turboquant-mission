@@ -9,9 +9,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from huggingface_hub import hf_hub_download, snapshot_download, HfApi
-from huggingface_hub.utils import RepositoryNotFoundError, HfHubHTTPError
-
+from huggingface_hub import HfApi, snapshot_download
+from huggingface_hub.utils import HfHubHTTPError, RepositoryNotFoundError
 
 # Default cache directory for models
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "llm-compress"
@@ -157,14 +156,14 @@ def download_model(
     """
     cache_path = get_cache_dir(cache_dir)
     model_dir = _get_model_dir(cache_path, model_id)
-    
+
     # Check if model already exists
     if model_dir.exists():
         metadata = _load_metadata(model_dir)
         if metadata and metadata.get("model_id") == model_id:
             print(f"Model {model_id} already exists in cache at {model_dir}")
             return model_dir
-    
+
     # Verify model exists on HuggingFace before downloading
     api = HfApi(token=token)
     try:
@@ -177,12 +176,12 @@ def download_model(
             raise DownloadError(f"Model '{model_id}' requires authentication. "
                                 "Please provide a valid HuggingFace token.")
         raise DownloadError(f"Error accessing HuggingFace Hub: {e}")
-    
+
     print(f"Downloading {model_id} from HuggingFace Hub...")
-    
+
     # Create model directory
     model_dir.mkdir(parents=True, exist_ok=True)
-    
+
     try:
         # Use snapshot_download - it has built-in progress bars
         downloaded_path = snapshot_download(
@@ -191,7 +190,7 @@ def download_model(
             local_dir_use_symlinks=False,
             token=token,
         )
-        
+
         # Save metadata
         _save_metadata(
             model_dir,
@@ -201,10 +200,10 @@ def download_model(
                 "files_downloaded": len(list(model_dir.iterdir())),
             }
         )
-        
+
         print(f"Download complete: {model_dir}")
         return model_dir
-        
+
     except Exception as e:
         # Clean up partial downloads
         if model_dir.exists():
@@ -225,10 +224,10 @@ def is_model_cached(model_id: str, cache_dir: str | Path | None = None) -> bool:
     """
     cache_path = get_cache_dir(cache_dir)
     model_dir = _get_model_dir(cache_path, model_id)
-    
+
     if not model_dir.exists():
         return False
-    
+
     metadata = _load_metadata(model_dir)
     return metadata is not None and metadata.get("model_id") == model_id
 
@@ -252,15 +251,15 @@ def remove_cached_model(model_id: str, cache_dir: str | Path | None = None) -> N
     """
     cache_path = get_cache_dir(cache_dir)
     model_dir = _get_model_dir(cache_path, model_id)
-    
+
     # Verify model exists in cache
     if not model_dir.exists():
         raise DownloadError(f"Model '{model_id}' not found in cache at {model_dir}")
-    
+
     metadata = _load_metadata(model_dir)
     if metadata is None or metadata.get("model_id") != model_id:
         raise DownloadError(f"Model '{model_id}' not found in cache (metadata missing or invalid)")
-    
+
     try:
         import shutil
         shutil.rmtree(model_dir)
@@ -279,15 +278,15 @@ def list_cached_models(cache_dir: str | Path | None = None) -> list[dict[str, An
     """
     cache_path = get_cache_dir(cache_dir)
     models = []
-    
+
     if not cache_path.exists():
         return models
-    
+
     for model_dir in cache_path.iterdir():
         if model_dir.is_dir():
             metadata = _load_metadata(model_dir)
             if metadata:
                 metadata["local_path"] = str(model_dir)
                 models.append(metadata)
-    
+
     return models

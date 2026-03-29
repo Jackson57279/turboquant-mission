@@ -16,8 +16,8 @@ __version__ = "0.1.0"
 __author__ = "llm-compress Team"
 __license__ = "MIT"
 
-from llm_compress.quantization import quantize_model
 from llm_compress.backends import get_backend
+from llm_compress.quantization import quantize_model
 
 __all__ = [
     "__version__",

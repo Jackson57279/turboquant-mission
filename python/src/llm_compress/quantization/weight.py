@@ -18,15 +18,14 @@ References:
 """
 
 import json
-import os
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
-import torch
 import bitsandbytes as bnb
-from safetensors.torch import save_file, load_file
+import torch
+from safetensors.torch import load_file, save_file
 
-from llm_compress.download import get_model_dir, get_cache_dir, load_metadata, save_metadata
+from llm_compress.download import get_model_dir, load_metadata, save_metadata
 
 
 def quantize_tensor(tensor: torch.Tensor, bits: int = 4) -> tuple[torch.Tensor, Any, tuple]:
@@ -49,9 +48,9 @@ def quantize_tensor(tensor: torch.Tensor, bits: int = 4) -> tuple[torch.Tensor, 
     """
     if bits not in [4, 8]:
         raise ValueError(f"Only 4-bit and 8-bit quantization supported, got {bits}")
-    
+
     original_shape = tensor.shape
-    
+
     # Ensure tensor is 2D and contiguous
     if tensor.dim() == 1:
         # Reshape 1D to 2D with single row
@@ -59,9 +58,9 @@ def quantize_tensor(tensor: torch.Tensor, bits: int = 4) -> tuple[torch.Tensor, 
     elif tensor.dim() > 2:
         # Flatten dimensions beyond the last two
         tensor = tensor.reshape(-1, tensor.shape[-1])
-    
+
     tensor = tensor.contiguous().float()
-    
+
     if bits == 4:
         # Use NF4 (Normal Float 4) quantization
         quant_type = bnb.functional.get_4bit_type('nf4', device='cpu')
@@ -69,7 +68,7 @@ def quantize_tensor(tensor: torch.Tensor, bits: int = 4) -> tuple[torch.Tensor, 
     else:
         # Use 8-bit block-wise quantization
         qweight, qstate = bnb.functional.quantize_blockwise(tensor)
-    
+
     return qweight, qstate, original_shape
 
 
@@ -95,13 +94,13 @@ def dequantize_tensor(
     """
     if bits not in [4, 8]:
         raise ValueError(f"Only 4-bit and 8-bit quantization supported, got {bits}")
-    
+
     if bits == 4:
         dequantized = bnb.functional.dequantize_4bit(quantized, qstate, original_shape)
     else:
         # For 8-bit, we need to reshape back after dequantization
         dequantized = bnb.functional.dequantize_blockwise(quantized, qstate)
-    
+
     return dequantized.reshape(original_shape)
 
 
@@ -131,16 +130,16 @@ def quantize_model_state_dict(
     quantized_tensors = {}
     quantization_metadata = {}
     non_quantized = {}
-    
+
     for name, tensor in state_dict.items():
         # Decide whether to quantize this tensor
         should_quantize = (
             tensor.dtype in [torch.float32, torch.float16, torch.bfloat16] and
             tensor.numel() > 0 and
-            (not quantize_linear_only or 
+            (not quantize_linear_only or
              ('weight' in name.lower() and tensor.dim() >= 2))
         )
-        
+
         if should_quantize:
             try:
                 qweight, qstate, orig_shape = quantize_tensor(tensor, bits)
@@ -161,7 +160,7 @@ def quantize_model_state_dict(
         else:
             non_quantized[name] = tensor
             quantization_metadata[name] = {'quantized': False, 'reason': 'excluded'}
-    
+
     return {
         'quantized_tensors': quantized_tensors,
         'quantization_metadata': quantization_metadata,
@@ -171,7 +170,7 @@ def quantize_model_state_dict(
 
 def save_quantized_model(
     quantized_data: dict[str, Any],
-    output_dir: Union[str, Path],
+    output_dir: str | Path,
     model_id: str,
     bits: int = 4
 ) -> Path:
@@ -196,16 +195,16 @@ def save_quantized_model(
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Combine all tensors into one dict for safetensors
     all_tensors = {}
     all_tensors.update(quantized_data['quantized_tensors'])
     all_tensors.update(quantized_data['non_quantized'])
-    
+
     # Save tensors using safetensors
     model_path = output_dir / 'model.safetensors'
     save_file(all_tensors, str(model_path))
-    
+
     # Save quantization metadata and config
     config = {
         'model_id': model_id,
@@ -214,15 +213,15 @@ def save_quantized_model(
         'quantization_metadata': quantized_data['quantization_metadata'],
         'format_version': '1.0',
     }
-    
+
     config_path = output_dir / 'quantization_config.json'
     with open(config_path, 'w') as f:
         json.dump(config, f, indent=2)
-    
+
     return output_dir
 
 
-def load_quantized_model(model_dir: Union[str, Path]) -> dict[str, Any]:
+def load_quantized_model(model_dir: str | Path) -> dict[str, Any]:
     """Load a quantized model from custom format.
     
     Args:
@@ -239,25 +238,25 @@ def load_quantized_model(model_dir: Union[str, Path]) -> dict[str, Any]:
         ValueError: If format version is incompatible
     """
     model_dir = Path(model_dir)
-    
+
     # Load quantization config
     config_path = model_dir / 'quantization_config.json'
-    with open(config_path, 'r') as f:
+    with open(config_path) as f:
         config = json.load(f)
-    
+
     if config.get('format_version') != '1.0':
         raise ValueError(f"Unsupported format version: {config.get('format_version')}")
-    
+
     # Load tensors using safetensors
     model_path = model_dir / 'model.safetensors'
     tensors = load_file(str(model_path))
-    
+
     # Identify quantized tensors
     quantized_names = [
         name for name, meta in config['quantization_metadata'].items()
         if meta.get('quantized', False)
     ]
-    
+
     return {
         'tensors': tensors,
         'config': config,
@@ -267,7 +266,7 @@ def load_quantized_model(model_dir: Union[str, Path]) -> dict[str, Any]:
 
 def dequantize_model(
     model_data: dict[str, Any],
-    dequantize_to_dtype: Optional[torch.dtype] = None
+    dequantize_to_dtype: torch.dtype | None = None
 ) -> dict[str, torch.Tensor]:
     """Dequantize all quantized tensors in a loaded model.
     
@@ -280,21 +279,21 @@ def dequantize_model(
     """
     if dequantize_to_dtype is None:
         dequantize_to_dtype = torch.float32
-    
+
     config = model_data['config']
     metadata = config['quantization_metadata']
     tensors = model_data['tensors']
-    
+
     dequantized = {}
-    
+
     for name, tensor in tensors.items():
         meta = metadata.get(name, {})
-        
+
         if meta.get('quantized', False):
             # Reconstruct quantization state
             bits = meta['bits']
             shape = tuple(meta['shape'])
-            
+
             # Build QuantState object
             absmax = torch.tensor(meta['absmax'], dtype=torch.float32)
             qstate = bnb.functional.QuantState(
@@ -302,7 +301,7 @@ def dequantize_model(
                 blocksize=meta.get('blocksize', 64),
                 code=meta.get('code'),
             )
-            
+
             # Dequantize
             dequantized[name] = dequantize_tensor(
                 tensor, qstate, shape, bits
@@ -310,15 +309,15 @@ def dequantize_model(
         else:
             # Non-quantized tensor - just convert dtype
             dequantized[name] = tensor.to(dequantize_to_dtype)
-    
+
     return dequantized
 
 
 def quantize_model(
     model_id: str,
     bits: int = 4,
-    cache_dir: Optional[str] = None,
-    output_suffix: Optional[str] = None
+    cache_dir: str | None = None,
+    output_suffix: str | None = None
 ) -> Path:
     """Quantize a downloaded HuggingFace model.
     
@@ -344,25 +343,25 @@ def quantize_model(
     """
     if bits not in [4, 8]:
         raise ValueError(f"Only 4-bit and 8-bit quantization supported, got {bits}")
-    
+
     # Get model directory
     model_dir = get_model_dir(model_id, cache_dir)
     original_dir = model_dir / 'original'
-    
+
     if not original_dir.exists():
         raise ValueError(
             f"Model {model_id} not found in cache. "
             "Please download it first with: llm-compress download {model_id}"
         )
-    
+
     # Determine output directory
     if output_suffix is None:
         output_suffix = f'quantized-{bits}bit'
     output_dir = model_dir / output_suffix
-    
+
     # Load metadata
     metadata = load_metadata(model_id, cache_dir)
-    
+
     # Load original model state dict
     from transformers import AutoModelForCausalLM
     model = AutoModelForCausalLM.from_pretrained(
@@ -371,13 +370,13 @@ def quantize_model(
         low_cpu_mem_usage=True,
     )
     state_dict = model.state_dict()
-    
+
     # Quantize
     quantized_data = quantize_model_state_dict(state_dict, bits)
-    
+
     # Save quantized model
     save_quantized_model(quantized_data, output_dir, model_id, bits)
-    
+
     # Update metadata
     metadata['quantized'] = True
     metadata['quantization'] = {
@@ -387,16 +386,16 @@ def quantize_model(
         'non_quantized_tensors': len(quantized_data['non_quantized']),
     }
     save_metadata(model_id, metadata, cache_dir)
-    
+
     # Clean up loaded model to free memory
     del model
     import gc
     gc.collect()
-    
+
     return output_dir
 
 
-def get_compression_ratio(model_dir: Union[str, Path]) -> float:
+def get_compression_ratio(model_dir: str | Path) -> float:
     """Calculate the compression ratio of a quantized model.
     
     Args:
@@ -412,14 +411,14 @@ def get_compression_ratio(model_dir: Union[str, Path]) -> float:
     model_data = load_quantized_model(model_dir)
     config = model_data['config']
     metadata = config['quantization_metadata']
-    
+
     total_original_bytes = 0
     total_quantized_bytes = 0
-    
+
     for name, tensor in model_data['tensors'].items():
         meta = metadata.get(name, {})
         tensor_bytes = tensor.numel() * tensor.element_size()
-        
+
         if meta.get('quantized', False):
             # Original was float32 (4 bytes per element)
             original_bytes = tensor.numel() * 4
@@ -433,10 +432,10 @@ def get_compression_ratio(model_dir: Union[str, Path]) -> float:
         else:
             original_bytes = tensor_bytes
             quantized_bytes = tensor_bytes
-        
+
         total_original_bytes += original_bytes
         total_quantized_bytes += quantized_bytes
-    
+
     return total_original_bytes / total_quantized_bytes
 
 

@@ -15,16 +15,15 @@ import os
 import re
 import subprocess
 import tempfile
-from pathlib import Path
-from typing import Any, Iterator
-from collections.abc import Iterator as IteratorABC
+from collections.abc import Iterator
+from typing import Any
 
 from llm_compress.backends.base import BaseBackend
 
 # Try to import llama-cpp-python
 try:
     from llama_cpp import Llama
-    
+
     LLAMA_CPP_AVAILABLE = True
     LLAMA_CPP_VERSION = getattr(Llama, "__version__", "unknown")
 except ImportError:
@@ -34,9 +33,9 @@ except ImportError:
 
 # Try to import transformers for GGUF conversion
 try:
+    from huggingface_hub import hf_hub_download, list_repo_files, snapshot_download
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    from huggingface_hub import hf_hub_download, snapshot_download, list_repo_files
-    
+
     HF_AVAILABLE = True
 except ImportError:
     HF_AVAILABLE = False
@@ -62,7 +61,7 @@ class GGUFConverter:
         output_dir: Directory for converted models
         quantization_type: GGUF quantization type (e.g., "Q4_K_M", "Q8_0")
     """
-    
+
     def __init__(
         self,
         model_id: str,
@@ -79,10 +78,10 @@ class GGUFConverter:
         self.model_id = model_id
         self.output_dir = output_dir or tempfile.gettempdir()
         self.quantization_type = quantization_type
-        
+
         # Create output directory if needed
         os.makedirs(self.output_dir, exist_ok=True)
-        
+
     def find_preconverted_gguf(self) -> str | None:
         """Search for pre-converted GGUF files on HuggingFace Hub.
         
@@ -96,7 +95,7 @@ class GGUFConverter:
         """
         if not HF_AVAILABLE or list_repo_files is None:
             return None
-            
+
         # Try common GGUF variant names
         model_name = self.model_id.split("/")[-1]
         gguf_variants = [
@@ -105,25 +104,25 @@ class GGUFConverter:
             "TheBloke/" + model_name + "-GGUF",
             "TheBloke/" + model_name + "-gguf",
         ]
-        
+
         for variant in gguf_variants:
             try:
                 # List files in the repo
                 files = list_repo_files(variant)
-                
+
                 # Look for GGUF files matching our quantization preference
                 gguf_files = [f for f in files if f.endswith(".gguf")]
-                
+
                 if gguf_files:
                     # Find best matching quantization
                     preferred_pattern = self.quantization_type.replace("_", r"_")
                     preferred_files = [
-                        f for f in gguf_files 
+                        f for f in gguf_files
                         if re.search(preferred_pattern, f, re.IGNORECASE)
                     ]
-                    
+
                     target_file = preferred_files[0] if preferred_files else gguf_files[0]
-                    
+
                     # Download the file
                     logger.info(f"Found pre-converted GGUF: {variant}/{target_file}")
                     downloaded_path = hf_hub_download(
@@ -133,13 +132,13 @@ class GGUFConverter:
                         local_dir_use_symlinks=False,
                     )
                     return downloaded_path
-                    
+
             except Exception as e:
                 logger.debug(f"Could not check variant {variant}: {e}")
                 continue
-                
+
         return None
-        
+
     def convert_hf_to_gguf(self) -> str | None:
         """Convert HuggingFace model to GGUF format.
         
@@ -154,12 +153,12 @@ class GGUFConverter:
                 "Transformers and huggingface-hub required for conversion. "
                 "Install with: pip install transformers huggingface-hub"
             )
-        
+
         # First check for pre-converted versions
         preconverted = self.find_preconverted_gguf()
         if preconverted:
             return preconverted
-            
+
         # Download the model if needed
         try:
             local_model_path = snapshot_download(
@@ -169,16 +168,16 @@ class GGUFConverter:
             )
         except Exception as e:
             raise RuntimeError(f"Failed to download model {self.model_id}: {e}")
-        
+
         # Try to use llama.cpp's convert script
         output_gguf = os.path.join(
-            self.output_dir, 
+            self.output_dir,
             f"{self.model_id.split('/')[-1]}_{self.quantization_type}.gguf"
         )
-        
+
         # Check for convert_hf_to_gguf.py in llama.cpp
         convert_script = self._find_convert_script()
-        
+
         if convert_script:
             try:
                 # Run conversion
@@ -188,7 +187,7 @@ class GGUFConverter:
                     "--outfile", output_gguf,
                     "--outtype", self._map_quantization_to_outtype(),
                 ]
-                
+
                 logger.info(f"Running conversion: {' '.join(cmd)}")
                 result = subprocess.run(
                     cmd,
@@ -196,22 +195,22 @@ class GGUFConverter:
                     text=True,
                     timeout=300,  # 5 minute timeout
                 )
-                
+
                 if result.returncode == 0 and os.path.exists(output_gguf):
                     logger.info(f"Successfully converted to {output_gguf}")
                     return output_gguf
                 else:
                     logger.error(f"Conversion failed: {result.stderr}")
-                    
+
             except subprocess.TimeoutExpired:
                 logger.error("Conversion timed out")
             except Exception as e:
                 logger.error(f"Conversion error: {e}")
-        
+
         # Fallback: Try using ctransformers or other tools
         logger.warning("Could not convert model using standard tools")
         return None
-        
+
     def _find_convert_script(self) -> str | None:
         """Find the llama.cpp convert_hf_to_gguf.py script."""
         # Common locations
@@ -221,7 +220,7 @@ class GGUFConverter:
             os.path.expanduser("~/llama.cpp/convert_hf_to_gguf.py"),
             os.path.expanduser("~/.local/bin/convert_hf_to_gguf.py"),
         ]
-        
+
         # Check PATH
         try:
             result = subprocess.run(
@@ -233,14 +232,14 @@ class GGUFConverter:
                 possible_paths.insert(0, result.stdout.strip())
         except Exception:
             pass
-            
+
         for path in possible_paths:
             if os.path.exists(path):
                 return path
-                
+
         return None
-        
-    def _map_quantization_to_outtype(self) -> str:
+
+    def _map_quantization_to_outtype(self, quant_type: str | None = None) -> str:
         """Map GGUF quantization type to llama.cpp outtype."""
         mapping = {
             "Q4_0": "q4_0",
@@ -256,7 +255,8 @@ class GGUFConverter:
             "F16": "f16",
             "F32": "f32",
         }
-        return mapping.get(self.quantization_type.upper(), "q4_k_m")
+        qt = quant_type or self.quantization_type
+        return mapping.get(qt.upper(), "q4_k_m")
 
 
 class LlamaCppBackend(BaseBackend):
@@ -285,7 +285,7 @@ class LlamaCppBackend(BaseBackend):
         >>> backend.initialize()
         >>> response = backend.generate("Hello, how are you?", max_tokens=50)
     """
-    
+
     def __init__(
         self,
         model_id: str,
@@ -312,7 +312,7 @@ class LlamaCppBackend(BaseBackend):
             **kwargs: Additional llama.cpp parameters
         """
         super().__init__(model_id, **kwargs)
-        
+
         self.gguf_path = gguf_path
         self.quantization = quantization
         self.n_ctx = n_ctx
@@ -320,15 +320,15 @@ class LlamaCppBackend(BaseBackend):
         self.n_gpu_layers = n_gpu_layers
         self.verbose = verbose
         self.seed = seed
-        
+
         # State
         self.llm: Llama | None = None
         self._initialized = False
         self.converter: GGUFConverter | None = None
-        self._is_direct_gguf = model_id.endswith(".gguf") or (
+        self._is_direct_gguf = model_id.endswith(".gguf") or bool(
             gguf_path and os.path.exists(gguf_path)
         )
-        
+
     def initialize(self) -> None:
         """Initialize the llama.cpp backend and load the model.
         
@@ -346,7 +346,7 @@ class LlamaCppBackend(BaseBackend):
                 "llama-cpp-python is not installed. "
                 "Install with: pip install llama-cpp-python"
             )
-        
+
         try:
             # Determine GGUF path
             if self._is_direct_gguf:
@@ -361,25 +361,25 @@ class LlamaCppBackend(BaseBackend):
                         "HuggingFace libraries required for conversion. "
                         "Install with: pip install transformers huggingface-hub"
                     )
-                
+
                 # Initialize converter
                 self.converter = GGUFConverter(
                     model_id=self.model_id,
                     quantization_type=self.quantization,
                 )
-                
+
                 # Convert or find pre-converted model
                 gguf_file = self.converter.find_preconverted_gguf()
-                
+
                 if not gguf_file:
                     raise RuntimeError(
                         f"Could not find or convert model {self.model_id}. "
                         f"Please provide a direct GGUF file path or install "
                         f"llama.cpp conversion tools."
                     )
-            
+
             logger.info(f"Loading GGUF model from: {gguf_file}")
-            
+
             # Load the model with llama.cpp
             self.llm = Llama(
                 model_path=gguf_file,
@@ -389,13 +389,13 @@ class LlamaCppBackend(BaseBackend):
                 verbose=self.verbose,
                 seed=self.seed,
             )
-            
+
             self._initialized = True
             logger.info("llama.cpp backend initialized successfully")
-            
+
         except Exception as e:
             raise RuntimeError(f"Failed to initialize llama.cpp backend: {e}") from e
-    
+
     def health(self) -> dict[str, Any]:
         """Return backend health status.
         
@@ -425,21 +425,21 @@ class LlamaCppBackend(BaseBackend):
             "n_gpu_layers": self.n_gpu_layers,
             "n_threads": self.n_threads,
         }
-        
+
         if not LLAMA_CPP_AVAILABLE:
             health_info["error"] = "llama-cpp-python not installed"
             return health_info
-        
+
         if not self._initialized:
             health_info["error"] = "Backend not initialized"
             return health_info
-        
+
         if self.llm is None:
             health_info["error"] = "LLM instance not created"
             return health_info
-        
+
         health_info["status"] = "healthy"
-        
+
         # Add model info if available
         if self.llm:
             try:
@@ -447,9 +447,9 @@ class LlamaCppBackend(BaseBackend):
                 health_info["context_size"] = self.llm.n_ctx()
             except Exception:
                 pass
-        
+
         return health_info
-    
+
     def generate(
         self,
         prompt: str,
@@ -477,12 +477,12 @@ class LlamaCppBackend(BaseBackend):
         """
         if not self._initialized or self.llm is None:
             raise RuntimeError("Backend not initialized. Call initialize() first.")
-        
+
         if stream:
             return self._generate_stream(prompt, max_tokens, temperature, top_p, stop)
         else:
             return self._generate_sync(prompt, max_tokens, temperature, top_p, stop)
-    
+
     def _generate_sync(
         self,
         prompt: str,
@@ -499,7 +499,7 @@ class LlamaCppBackend(BaseBackend):
             top_p=top_p,
             stop=stop or [],
         )
-        
+
         return {
             "id": "llamacpp-gen-" + str(hash(prompt))[:8],
             "object": "text_completion",
@@ -518,7 +518,7 @@ class LlamaCppBackend(BaseBackend):
                 "total_tokens": output.get("usage", {}).get("total_tokens", 0),
             },
         }
-    
+
     def _generate_stream(
         self,
         prompt: str,
@@ -536,7 +536,7 @@ class LlamaCppBackend(BaseBackend):
             stop=stop or [],
             stream=True,
         )
-        
+
         for i, chunk in enumerate(stream):
             yield {
                 "id": f"llamacpp-chunk-{i}",
@@ -550,7 +550,7 @@ class LlamaCppBackend(BaseBackend):
                     }
                 ],
             }
-        
+
         # Final chunk
         yield {
             "id": "llamacpp-chunk-final",
@@ -564,7 +564,7 @@ class LlamaCppBackend(BaseBackend):
                 }
             ],
         }
-    
+
     def chat(
         self,
         messages: list[dict[str, str]],
@@ -592,13 +592,13 @@ class LlamaCppBackend(BaseBackend):
         """
         if not self._initialized or self.llm is None:
             raise RuntimeError("Backend not initialized. Call initialize() first.")
-        
+
         # llama.cpp handles chat formatting internally
         if stream:
             return self._chat_stream(messages, max_tokens, temperature, top_p, stop)
         else:
             return self._chat_sync(messages, max_tokens, temperature, top_p, stop)
-    
+
     def _chat_sync(
         self,
         messages: list[dict[str, str]],
@@ -615,7 +615,7 @@ class LlamaCppBackend(BaseBackend):
             top_p=top_p,
             stop=stop or [],
         )
-        
+
         return {
             "id": "llamacpp-chat-" + str(hash(str(messages)))[:8],
             "object": "chat.completion",
@@ -636,7 +636,7 @@ class LlamaCppBackend(BaseBackend):
                 "total_tokens": output.get("usage", {}).get("total_tokens", 0),
             },
         }
-    
+
     def _chat_stream(
         self,
         messages: list[dict[str, str]],
@@ -654,7 +654,7 @@ class LlamaCppBackend(BaseBackend):
             stop=stop or [],
             stream=True,
         )
-        
+
         for i, chunk in enumerate(stream):
             delta = chunk["choices"][0].get("delta", {})
             yield {
@@ -672,7 +672,7 @@ class LlamaCppBackend(BaseBackend):
                     }
                 ],
             }
-        
+
         # Final chunk
         yield {
             "id": "llamacpp-chat-chunk-final",
@@ -686,29 +686,29 @@ class LlamaCppBackend(BaseBackend):
                 }
             ],
         }
-    
+
     def shutdown(self) -> None:
         """Shutdown llama.cpp backend and release resources."""
         if self.llm:
             # llama.cpp doesn't have explicit cleanup, but we clear the reference
             self.llm = None
-        
+
         self._initialized = False
         logger.info("llama.cpp backend shutdown")
 
 
 class LlamaCppBackendStub(BaseBackend):
     """Stub implementation for when llama-cpp-python is not available."""
-    
+
     def __init__(self, model_id: str, **kwargs: Any) -> None:
         super().__init__(model_id, **kwargs)
-    
+
     def initialize(self) -> None:
         raise RuntimeError(
             "llama-cpp-python is not installed. "
             "Install with: pip install llama-cpp-python"
         )
-    
+
     def health(self) -> dict[str, Any]:
         return {
             "status": "unhealthy",
@@ -716,15 +716,15 @@ class LlamaCppBackendStub(BaseBackend):
             "llama_cpp_available": False,
             "error": "llama-cpp-python not installed",
         }
-    
+
     def generate(self, *args: Any, **kwargs: Any) -> Any:
         self.initialize()
         return None
-    
+
     def chat(self, *args: Any, **kwargs: Any) -> Any:
         self.initialize()
         return None
-    
+
     def shutdown(self) -> None:
         pass
 

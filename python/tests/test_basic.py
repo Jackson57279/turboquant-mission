@@ -1,6 +1,5 @@
 """Basic import tests for llm_compress package."""
 
-import pytest
 from llm_compress import __version__
 
 
@@ -20,10 +19,8 @@ def test_import_package():
 
 def test_import_submodules():
     """Test that all submodules can be imported."""
-    from llm_compress import quantization
-    from llm_compress import backends
-    from llm_compress import server
-    
+    from llm_compress import backends, quantization, server
+
     assert hasattr(quantization, "quantize_model")
     assert hasattr(backends, "get_backend")
     assert hasattr(server, "create_app")

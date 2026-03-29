@@ -1,10 +1,6 @@
 """Tests for the list and remove CLI commands."""
 
 import json
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -12,9 +8,6 @@ from click.testing import CliRunner
 from llm_compress.cli import main
 from llm_compress.download import (
     DownloadError,
-    _get_model_dir,
-    get_cache_dir,
-    is_model_cached,
     list_cached_models,
     remove_cached_model,
 )

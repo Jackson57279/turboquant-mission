@@ -6,24 +6,24 @@ This module provides pluggable backends:
 """
 
 from llm_compress.backends.base import BaseBackend
-from llm_compress.backends.vllm import (
-    VLLM_AVAILABLE,
-    VLLM_VERSION,
-    VLLMBackend,
-    VLLMBackendClass,
-    VLLMBackendStub,
-    TurboQuantAttentionWrapper,
-    TurboQuantKVCacheManager,
-)
 from llm_compress.backends.llama_cpp import (
     LLAMA_CPP_AVAILABLE,
     LLAMA_CPP_VERSION,
+    GGUFConverter,
     LlamaCppBackend,
     LlamaCppBackendClass,
     LlamaCppBackendStub,
-    GGUFConverter,
 )
 from llm_compress.backends.registry import get_backend, list_backends
+from llm_compress.backends.vllm import (
+    VLLM_AVAILABLE,
+    VLLM_VERSION,
+    TurboQuantAttentionWrapper,
+    TurboQuantKVCacheManager,
+    VLLMBackend,
+    VLLMBackendClass,
+    VLLMBackendStub,
+)
 
 __all__ = [
     "BaseBackend",

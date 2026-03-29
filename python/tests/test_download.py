@@ -70,10 +70,10 @@ class TestMetadata:
         """Test saving and loading metadata."""
         model_dir = tmp_path / "test-model"
         model_dir.mkdir()
-        
+
         info = {"key": "value", "number": 42}
         _save_metadata(model_dir, "test/model", info)
-        
+
         loaded = _load_metadata(model_dir)
         assert loaded is not None
         assert loaded["model_id"] == "test/model"
@@ -84,7 +84,7 @@ class TestMetadata:
         """Test loading metadata from directory without metadata file."""
         model_dir = tmp_path / "test-model"
         model_dir.mkdir()
-        
+
         loaded = _load_metadata(model_dir)
         assert loaded is None
 
@@ -92,12 +92,12 @@ class TestMetadata:
         """Test metadata is saved as valid JSON."""
         model_dir = tmp_path / "test-model"
         model_dir.mkdir()
-        
+
         _save_metadata(model_dir, "test/model", {"test": "data"})
-        
+
         metadata_path = model_dir / "metadata.json"
         assert metadata_path.exists()
-        
+
         # Verify it's valid JSON
         with open(metadata_path) as f:
             data = json.load(f)
@@ -113,15 +113,15 @@ class TestDownloadModel:
         """Test successful model download."""
         mock_api = MagicMock()
         mock_hfapi.return_value = mock_api
-        
+
         model_dir = tmp_path / "models"
         mock_snapshot.return_value = str(model_dir / "microsoft--DialoGPT-medium")
-        
+
         result = download_model(
             "microsoft/DialoGPT-medium",
             cache_dir=str(model_dir),
         )
-        
+
         assert mock_api.model_info.called
         assert mock_snapshot.called
         assert result.exists()
@@ -130,38 +130,38 @@ class TestDownloadModel:
     def test_model_not_found(self, mock_hfapi, tmp_path):
         """Test error handling for non-existent model."""
         from huggingface_hub.utils import RepositoryNotFoundError
-        
+
         mock_response = MagicMock()
         mock_response.status_code = 404
-        
+
         mock_api = MagicMock()
         mock_api.model_info.side_effect = RepositoryNotFoundError(
             "Model not found", response=mock_response
         )
         mock_hfapi.return_value = mock_api
-        
+
         with pytest.raises(DownloadError) as exc_info:
             download_model("invalid/model", cache_dir=str(tmp_path))
-        
+
         assert "not found" in str(exc_info.value).lower()
 
     @patch("llm_compress.download.HfApi")
     def test_authentication_error(self, mock_hfapi, tmp_path):
         """Test error handling for gated models."""
         from huggingface_hub.utils import HfHubHTTPError
-        
+
         mock_response = MagicMock()
         mock_response.status_code = 401
-        
+
         mock_api = MagicMock()
         mock_api.model_info.side_effect = HfHubHTTPError(
             "Unauthorized", response=mock_response
         )
         mock_hfapi.return_value = mock_api
-        
+
         with pytest.raises(DownloadError) as exc_info:
             download_model("private/model", cache_dir=str(tmp_path))
-        
+
         assert "authentication" in str(exc_info.value).lower() or "token" in str(exc_info.value).lower()
 
     @patch("llm_compress.download.HfApi")
@@ -172,16 +172,16 @@ class TestDownloadModel:
         mock_api = MagicMock()
         mock_hfapi.return_value = mock_api
         mock_load_meta.return_value = {"model_id": "microsoft/DialoGPT-medium"}
-        
+
         model_dir = tmp_path / "models"
         model_path = model_dir / "microsoft--DialoGPT-medium"
         model_path.mkdir(parents=True)
-        
+
         result = download_model(
             "microsoft/DialoGPT-medium",
             cache_dir=str(model_dir),
         )
-        
+
         # Should not call model_info or snapshot_download for cached models
         assert not mock_api.model_info.called
         assert not mock_snapshot.called
@@ -195,11 +195,11 @@ class TestIsModelCached:
         """Test detecting cached model."""
         model_dir = tmp_path / "microsoft--DialoGPT-medium"
         model_dir.mkdir()
-        
+
         metadata_path = model_dir / "metadata.json"
         with open(metadata_path, "w") as f:
             json.dump({"model_id": "microsoft/DialoGPT-medium"}, f)
-        
+
         assert is_model_cached("microsoft/DialoGPT-medium", cache_dir=str(tmp_path))
 
     def test_model_not_cached(self, tmp_path):
@@ -227,14 +227,14 @@ class TestListCachedModels:
         model1.mkdir()
         with open(model1 / "metadata.json", "w") as f:
             json.dump({"model_id": "org/model1"}, f)
-        
+
         model2 = tmp_path / "model2"
         model2.mkdir()
         with open(model2 / "metadata.json", "w") as f:
             json.dump({"model_id": "org/model2"}, f)
-        
+
         result = list_cached_models(cache_dir=str(tmp_path))
-        
+
         assert len(result) == 2
         model_ids = {r["model_id"] for r in result}
         assert model_ids == {"org/model1", "org/model2"}
@@ -249,14 +249,14 @@ class TestDownloadCLI:
         """Test successful download command."""
         mock_api = MagicMock()
         mock_hfapi.return_value = mock_api
-        
+
         model_dir = tmp_path / "models"
         mock_snapshot.return_value = str(model_dir / "microsoft--DialoGPT-medium")
-        
+
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(main, ["download", "microsoft/DialoGPT-medium"])
-        
+
         assert result.exit_code == 0
 
     @patch("llm_compress.download.snapshot_download")
@@ -265,10 +265,10 @@ class TestDownloadCLI:
         """Test download with custom cache directory."""
         mock_api = MagicMock()
         mock_hfapi.return_value = mock_api
-        
+
         cache_dir = tmp_path / "custom-cache"
         mock_snapshot.return_value = str(cache_dir / "microsoft--DialoGPT-medium")
-        
+
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(main, [
@@ -276,7 +276,7 @@ class TestDownloadCLI:
                 "microsoft/DialoGPT-medium",
                 "--cache-dir", str(cache_dir),
             ])
-        
+
         assert result.exit_code == 0
         # Verify snapshot_download was called with correct cache_dir
         call_kwargs = mock_snapshot.call_args.kwargs
@@ -286,20 +286,20 @@ class TestDownloadCLI:
     def test_download_invalid_model(self, mock_hfapi, tmp_path):
         """Test download with invalid model ID."""
         from huggingface_hub.utils import RepositoryNotFoundError
-        
+
         mock_response = MagicMock()
         mock_response.status_code = 404
-        
+
         mock_api = MagicMock()
         mock_api.model_info.side_effect = RepositoryNotFoundError(
             "Model not found", response=mock_response
         )
         mock_hfapi.return_value = mock_api
-        
+
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(main, ["download", "invalid/model"])
-        
+
         assert result.exit_code != 0
         assert "not found" in result.output.lower() or "error" in result.output.lower()
 
@@ -309,9 +309,9 @@ class TestDownloadCLI:
         """Test download with token option."""
         mock_api = MagicMock()
         mock_hfapi.return_value = mock_api
-        
+
         mock_snapshot.return_value = str(tmp_path / "private--model")
-        
+
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(main, [
@@ -319,14 +319,14 @@ class TestDownloadCLI:
                 "private/model",
                 "--token", "hf_test_token_123",
             ])
-        
+
         assert result.exit_code == 0
 
     def test_download_help(self):
         """Test download command help."""
         runner = CliRunner()
         result = runner.invoke(main, ["download", "--help"])
-        
+
         assert result.exit_code == 0
         assert "Download a model" in result.output
         assert "--cache-dir" in result.output
