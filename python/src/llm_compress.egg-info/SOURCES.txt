@@ -23,3 +23,5 @@ src/llm_compress/server/app.py
 tests/test_basic.py
 tests/test_download.py
 tests/test_list_remove.py
+tests/test_quantization.py
+tests/test_quantize.py

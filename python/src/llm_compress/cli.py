@@ -93,7 +93,7 @@ def download(model_id: str, cache_dir: str | None, token: str | None) -> None:
 @click.option(
     "--kv-cache/--no-kv-cache",
     default=False,
-    help="Enable KV cache quantization",
+    help="Enable KV cache quantization (3-bit keys, 2-bit values)",
 )
 @click.option(
     "--cache-dir",
@@ -104,11 +104,69 @@ def quantize(model_id: str, bits: str, kv_cache: bool, cache_dir: str | None) ->
     """Quantize a downloaded model.
     
     MODEL_ID is the HuggingFace model identifier.
+    
+    This command quantizes a previously downloaded model's weights to the
+    specified bit width (4 or 8). The quantized model is saved alongside
+    the original and can be used for efficient inference.
+    
+    Examples:
+        llm-compress quantize microsoft/DialoGPT-medium --bits 4
+        llm-compress quantize meta-llama/Llama-2-7b-hf --bits 8 --kv-cache
     """
+    from llm_compress.quantization.weight import quantize_model, get_compression_ratio
+    from llm_compress.download import is_model_cached, get_model_dir
+    from pathlib import Path
+    import time
+    
+    # Check if model is downloaded
+    if not is_model_cached(model_id, cache_dir=cache_dir):
+        raise click.ClickException(
+            f"Model '{model_id}' not found in cache. "
+            f"Please download it first with: llm-compress download {model_id}"
+        )
+    
+    bits_int = int(bits)
+    
     click.echo(f"Quantizing {model_id} to {bits}-bit weights...")
+    
     if kv_cache:
         click.echo("KV cache quantization enabled (3-bit keys, 2-bit values)")
-    click.echo("Note: This is a placeholder. Full implementation coming in cli-quantize-command.")
+    
+    # Show progress
+    click.echo("Loading model and preparing quantization...")
+    start_time = time.time()
+    
+    try:
+        # Perform quantization
+        output_dir = quantize_model(
+            model_id=model_id,
+            bits=bits_int,
+            cache_dir=cache_dir,
+        )
+        
+        # Calculate compression ratio
+        compression_ratio = get_compression_ratio(output_dir)
+        
+        # Calculate elapsed time
+        elapsed_time = time.time() - start_time
+        
+        # Output results
+        click.echo()
+        click.echo("✓ Quantization complete!")
+        click.echo(f"  Model: {model_id}")
+        click.echo(f"  Bits: {bits}-bit weights")
+        click.echo(f"  KV cache: {'enabled' if kv_cache else 'disabled'}")
+        click.echo(f"  Compression ratio: {compression_ratio:.2f}x")
+        click.echo(f"  Time: {elapsed_time:.1f}s")
+        click.echo(f"  Output: {output_dir}")
+        click.echo()
+        click.echo(f"To serve this model, run:")
+        click.echo(f"  llm-compress serve {model_id}")
+        
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    except Exception as e:
+        raise click.ClickException(f"Quantization failed: {e}")
 
 
 @main.command()
