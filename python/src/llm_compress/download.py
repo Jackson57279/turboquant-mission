@@ -189,6 +189,41 @@ def is_model_cached(model_id: str, cache_dir: str | Path | None = None) -> bool:
     return metadata is not None and metadata.get("model_id") == model_id
 
 
+def remove_cached_model(model_id: str, cache_dir: str | Path | None = None) -> None:
+    """Remove a model from the cache.
+    
+    This function deletes all files associated with a model from the cache,
+    including the downloaded model files and metadata.
+    
+    Args:
+        model_id: The HuggingFace model identifier (e.g., microsoft/DialoGPT-medium).
+        cache_dir: Custom cache directory. If None, uses default.
+        
+    Raises:
+        DownloadError: If the model doesn't exist in cache or removal fails.
+        
+    Example:
+        >>> remove_cached_model("microsoft/DialoGPT-medium")
+        >>> # Model files have been deleted
+    """
+    cache_path = get_cache_dir(cache_dir)
+    model_dir = _get_model_dir(cache_path, model_id)
+    
+    # Verify model exists in cache
+    if not model_dir.exists():
+        raise DownloadError(f"Model '{model_id}' not found in cache at {model_dir}")
+    
+    metadata = _load_metadata(model_dir)
+    if metadata is None or metadata.get("model_id") != model_id:
+        raise DownloadError(f"Model '{model_id}' not found in cache (metadata missing or invalid)")
+    
+    try:
+        import shutil
+        shutil.rmtree(model_dir)
+    except Exception as e:
+        raise DownloadError(f"Failed to remove model '{model_id}': {e}")
+
+
 def list_cached_models(cache_dir: str | Path | None = None) -> list[dict[str, Any]]:
     """List all models currently in the cache.
     
