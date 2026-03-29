@@ -1,0 +1,48 @@
+Metadata-Version: 2.4
+Name: llm-compress
+Version: 0.1.0
+Summary: Unified LLM Quantization & Inference System with TurboQuant and AirLLM
+Author-email: llm-compress Team <team@llm-compress.dev>
+License: MIT
+Project-URL: Homepage, https://github.com/llm-compress/llm-compress
+Project-URL: Documentation, https://llm-compress.readthedocs.io
+Project-URL: Repository, https://github.com/llm-compress/llm-compress
+Project-URL: Issues, https://github.com/llm-compress/llm-compress/issues
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: torch>=2.1.0
+Requires-Dist: transformers>=4.40.0
+Requires-Dist: accelerate>=0.25.0
+Requires-Dist: huggingface-hub>=0.20.0
+Requires-Dist: vllm>=0.6.0; python_version < "3.14"
+Requires-Dist: click>=8.1.0
+Requires-Dist: fastapi>=0.109.0
+Requires-Dist: uvicorn[standard]>=0.27.0
+Requires-Dist: pydantic>=2.5.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: bitsandbytes>=0.42.0
+Requires-Dist: triton>=2.2.0; python_version < "3.14"
+Requires-Dist: tqdm>=4.66.0
+Requires-Dist: safetensors>=0.4.0
+Requires-Dist: sentencepiece>=0.1.99
+Requires-Dist: protobuf>=3.20.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.1.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
+Requires-Dist: mypy>=1.8.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: black>=23.12.0; extra == "dev"
+Requires-Dist: build>=1.0.0; extra == "dev"
+Requires-Dist: twine>=5.0.0; extra == "dev"
+Requires-Dist: mkdocs>=1.5.0; extra == "dev"
+Requires-Dist: mkdocs-material>=9.5.0; extra == "dev"
+Requires-Dist: httpx>=0.26.0; extra == "dev"

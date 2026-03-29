@@ -1,0 +1,43 @@
+commands:
+  install-python:
+    command: cd python && pip install -e ".[dev]"
+  install-typescript:
+    command: cd typescript && bun install
+  test-python:
+    command: cd python && pytest -xvs
+  test-typescript:
+    command: cd typescript && bun test
+  typecheck-python:
+    command: cd python && mypy llm_compress
+  typecheck-typescript:
+    command: cd typescript && tsc --noEmit
+  build-python:
+    command: cd python && python -m build
+  build-typescript:
+    command: cd typescript && bun run build
+  lint-python:
+    command: cd python && ruff check llm_compress tests
+  lint-typescript:
+    command: cd typescript && oxlint
+  docs:
+    command: cd python && mkdocs serve
+
+services:
+  llm-compress-api:
+    start: cd python && llm-compress serve test-model --port 3200 --host 127.0.0.1
+    stop: lsof -ti :3200 | xargs kill -9 2>/dev/null || true
+    healthcheck: curl -sf http://127.0.0.1:3200/health
+    port: 3200
+    depends_on: []
+  llm-compress-api-vllm:
+    start: cd python && llm-compress serve test-model --backend vllm --port 3201
+    stop: lsof -ti :3201 | xargs kill -9 2>/dev/null || true
+    healthcheck: curl -sf http://127.0.0.1:3201/health
+    port: 3201
+    depends_on: []
+  llm-compress-api-llamacpp:
+    start: cd python && llm-compress serve test-model --backend llama-cpp --port 3202
+    stop: lsof -ti :3202 | xargs kill -9 2>/dev/null || true
+    healthcheck: curl -sf http://127.0.0.1:3202/health
+    port: 3202
+    depends_on: []
