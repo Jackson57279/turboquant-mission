@@ -4,15 +4,23 @@ This module provides backend discovery and instantiation.
 """
 
 from typing import Any
+
 from llm_compress.backends.base import BaseBackend
-from llm_compress.backends.vllm import VLLMBackend
+from llm_compress.backends.vllm import VLLM_AVAILABLE, VLLMBackend, VLLMBackendStub
 from llm_compress.backends.llama_cpp import LlamaCppBackend
 
 
-_BACKENDS: dict[str, type[BaseBackend]] = {
-    "vllm": VLLMBackend,
-    "llama-cpp": LlamaCppBackend,
-}
+_BACKENDS: dict[str, type[BaseBackend]] = {}
+
+# Register vLLM backend if available
+if VLLM_AVAILABLE:
+    _BACKENDS["vllm"] = VLLMBackend
+else:
+    # Register stub that will raise informative errors
+    _BACKENDS["vllm"] = VLLMBackendStub  # type: ignore
+
+# Register llama.cpp backend
+_BACKENDS["llama-cpp"] = LlamaCppBackend
 
 
 def get_backend(name: str, model_id: str, **kwargs: Any) -> BaseBackend:
@@ -30,7 +38,9 @@ def get_backend(name: str, model_id: str, **kwargs: Any) -> BaseBackend:
         ValueError: If backend name is unknown
     """
     if name not in _BACKENDS:
-        raise ValueError(f"Unknown backend: {name}. Available: {list(_BACKENDS.keys())}")
+        raise ValueError(
+            f"Unknown backend: {name}. Available: {list(_BACKENDS.keys())}"
+        )
     
     backend_class = _BACKENDS[name]
     return backend_class(model_id, **kwargs)

@@ -17,9 +17,19 @@ from llm_compress.quantization.weight import (
     get_compression_ratio,
     estimate_accuracy_loss,
 )
-from llm_compress.quantization.kv_cache import KVCacheQuantizer
+from llm_compress.quantization.kv_cache import (
+    KVCacheQuantizer,
+    LloydMaxQuantizer,
+    OrthogonalRotation,
+    QJLProjection,
+    TurboQuantKeyCompressor,
+    GroupValueQuantizer,
+    compute_cosine_similarity,
+    estimate_compression_ratio,
+)
 
 __all__ = [
+    # Weight quantization
     "quantize_model",
     "quantize_tensor",
     "dequantize_tensor",
@@ -29,5 +39,13 @@ __all__ = [
     "load_quantized_model",
     "get_compression_ratio",
     "estimate_accuracy_loss",
+    # KV cache quantization
     "KVCacheQuantizer",
+    "LloydMaxQuantizer",
+    "OrthogonalRotation",
+    "QJLProjection",
+    "TurboQuantKeyCompressor",
+    "GroupValueQuantizer",
+    "compute_cosine_similarity",
+    "estimate_compression_ratio",
 ]
