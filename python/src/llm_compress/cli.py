@@ -194,14 +194,86 @@ def quantize(model_id: str, bits: str, kv_cache: bool, cache_dir: str | None) ->
     type=click.Path(),
     help="Cache directory for model files",
 )
-def serve(model_id: str, port: int, host: str, backend: str, cache_dir: str | None) -> None:
+@click.option(
+    "--kv-cache/--no-kv-cache",
+    default=True,
+    help="Enable KV cache compression (default: enabled)",
+)
+def serve(model_id: str, port: int, host: str, backend: str, cache_dir: str | None, kv_cache: bool) -> None:
     """Start the OpenAI-compatible API server.
     
     MODEL_ID is the HuggingFace model identifier of the quantized model.
+    
+    This command starts a FastAPI server that provides an OpenAI-compatible
+    API for serving quantized models. The server supports:
+    
+    - GET /health - Health check endpoint
+    - GET /v1/models - List available models
+    - POST /v1/chat/completions - Chat completions (with streaming support)
+    - POST /v1/completions - Legacy text completions (with streaming support)
+    
+    Examples:
+        llm-compress serve microsoft/DialoGPT-medium
+        llm-compress serve meta-llama/Llama-2-7b-hf --backend llama-cpp --port 8080
+        llm-compress serve my-model --host 0.0.0.0 --port 3200
     """
-    click.echo(f"Starting API server for {model_id}...")
-    click.echo(f"Backend: {backend}, Host: {host}, Port: {port}")
-    click.echo("Note: This is a placeholder. Full implementation coming in cli-serve-command.")
+    import uvicorn
+    
+    from llm_compress.download import is_model_cached
+    from llm_compress.server.app import create_app
+
+    # Check if model is downloaded (warn if not quantized)
+    is_cached = is_model_cached(model_id, cache_dir=cache_dir)
+    
+    if not is_cached:
+        # Check if it's in default cache location
+        click.echo(f"Warning: Model '{model_id}' not found in cache.", err=True)
+        click.echo("Attempting to load from HuggingFace Hub...", err=True)
+    else:
+        # Check for quantization by looking for quantization metadata
+        # For now, show a general warning
+        click.echo(f"Serving model: {model_id}")
+        click.echo(f"Note: If model is not quantized, performance may be reduced.")
+
+    click.echo(f"Backend: {backend}")
+    click.echo(f"Host: {host}")
+    click.echo(f"Port: {port}")
+    click.echo(f"KV cache compression: {'enabled' if kv_cache else 'disabled'}")
+    click.echo()
+
+    # Create the FastAPI app
+    try:
+        app = create_app(
+            model_id=model_id,
+            backend=backend,
+            cache_dir=cache_dir,
+            enable_kv_compression=kv_cache,
+        )
+    except Exception as e:
+        raise click.ClickException(f"Failed to create server: {e}")
+
+    click.echo(f"Starting API server at http://{host}:{port}")
+    click.echo("Available endpoints:")
+    click.echo(f"  GET  http://{host}:{port}/health")
+    click.echo(f"  GET  http://{host}:{port}/v1/models")
+    click.echo(f"  POST http://{host}:{port}/v1/chat/completions")
+    click.echo(f"  POST http://{host}:{port}/v1/completions")
+    click.echo()
+    click.echo("Press Ctrl+C to stop the server")
+    click.echo()
+
+    # Run the server
+    try:
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            log_level="info",
+        )
+    except KeyboardInterrupt:
+        click.echo("\nServer stopped.")
+    except Exception as e:
+        raise click.ClickException(f"Server error: {e}")
 
 
 @main.command()
