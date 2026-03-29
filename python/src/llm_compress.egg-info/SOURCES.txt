@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 src/llm_compress/__init__.py
 src/llm_compress/cli.py
+src/llm_compress/download.py
 src/llm_compress/py.typed
 src/llm_compress.egg-info/PKG-INFO
 src/llm_compress.egg-info/SOURCES.txt
@@ -20,3 +21,5 @@ src/llm_compress/quantization/weight.py
 src/llm_compress/server/__init__.py
 src/llm_compress/server/app.py
 tests/test_basic.py
+tests/test_download.py
+tests/test_list_remove.py

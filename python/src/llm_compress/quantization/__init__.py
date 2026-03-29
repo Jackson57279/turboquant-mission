@@ -6,10 +6,28 @@ This module provides:
 - Layer-wise loading for low-memory inference
 """
 
-from llm_compress.quantization.weight import quantize_model
+from llm_compress.quantization.weight import (
+    quantize_model,
+    quantize_tensor,
+    dequantize_tensor,
+    quantize_model_state_dict,
+    dequantize_model,
+    save_quantized_model,
+    load_quantized_model,
+    get_compression_ratio,
+    estimate_accuracy_loss,
+)
 from llm_compress.quantization.kv_cache import KVCacheQuantizer
 
 __all__ = [
     "quantize_model",
+    "quantize_tensor",
+    "dequantize_tensor",
+    "quantize_model_state_dict",
+    "dequantize_model",
+    "save_quantized_model",
+    "load_quantized_model",
+    "get_compression_ratio",
+    "estimate_accuracy_loss",
     "KVCacheQuantizer",
 ]

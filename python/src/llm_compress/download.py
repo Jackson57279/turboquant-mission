@@ -51,6 +51,20 @@ def _get_model_dir(cache_dir: Path, model_id: str) -> Path:
     return cache_dir / safe_model_id
 
 
+def get_model_dir(model_id: str, cache_dir: str | Path | None = None) -> Path:
+    """Get the directory for a specific model (public API).
+    
+    Args:
+        model_id: The HuggingFace model identifier.
+        cache_dir: Custom cache directory. If None, uses default.
+        
+    Returns:
+        Path to the model's directory.
+    """
+    cache_path = get_cache_dir(cache_dir)
+    return _get_model_dir(cache_path, model_id)
+
+
 def _save_metadata(model_dir: Path, model_id: str, info: dict[str, Any]) -> None:
     """Save model metadata to the cache directory.
     
@@ -68,6 +82,20 @@ def _save_metadata(model_dir: Path, model_id: str, info: dict[str, Any]) -> None
         json.dump(metadata, f, indent=2)
 
 
+def save_metadata(model_id: str, info: dict[str, Any], cache_dir: str | Path | None = None) -> None:
+    """Save model metadata to the cache directory (public API).
+    
+    Args:
+        model_id: The HuggingFace model identifier.
+        info: Model information to save.
+        cache_dir: Custom cache directory. If None, uses default.
+    """
+    cache_path = get_cache_dir(cache_dir)
+    model_dir = _get_model_dir(cache_path, model_id)
+    model_dir.mkdir(parents=True, exist_ok=True)
+    _save_metadata(model_dir, model_id, info)
+
+
 def _load_metadata(model_dir: Path) -> dict[str, Any] | None:
     """Load model metadata from the cache directory.
     
@@ -82,6 +110,22 @@ def _load_metadata(model_dir: Path) -> dict[str, Any] | None:
         with open(metadata_path) as f:
             return json.load(f)
     return None
+
+
+def load_metadata(model_id: str, cache_dir: str | Path | None = None) -> dict[str, Any]:
+    """Load model metadata from the cache directory (public API).
+    
+    Args:
+        model_id: The HuggingFace model identifier.
+        cache_dir: Custom cache directory. If None, uses default.
+        
+    Returns:
+        Metadata dict if found, empty dict otherwise.
+    """
+    cache_path = get_cache_dir(cache_dir)
+    model_dir = _get_model_dir(cache_path, model_id)
+    metadata = _load_metadata(model_dir)
+    return metadata if metadata is not None else {}
 
 
 def download_model(
