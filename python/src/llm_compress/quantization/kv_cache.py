@@ -533,19 +533,31 @@ dictionary-based quantization. This is more efficient than per-vector
         Returns:
             Self for method chaining
         """
-        # Group values
+        # Flatten to (num_vectors, head_dim)
+        if sample_values.dim() == 1:
+            sample_values = sample_values.unsqueeze(0)
+        
+        # Get actual dimensions from the tensor
+        actual_head_dim = sample_values.shape[-1]
         num_vectors = sample_values.shape[0] if sample_values.dim() >= 1 else 1
+        
+        # Flatten all dimensions except the last one
+        if sample_values.dim() > 2:
+            sample_values = sample_values.reshape(-1, actual_head_dim)
+            num_vectors = sample_values.shape[0]
+        
         padded_len = ((num_vectors + self.group_size - 1) // self.group_size) * self.group_size
         
-        # Pad if necessary
+        # Pad if necessary - pad zeros at the end
         if num_vectors < padded_len:
             padding = padded_len - num_vectors
+            # Pad along dimension 0 (num_vectors dimension)
             sample_values = F.pad(sample_values, (0, 0, 0, padding))
         
         # Reshape into groups
         num_groups = padded_len // self.group_size
         grouped = sample_values[:num_groups * self.group_size].reshape(
-            num_groups, self.group_size, self.head_dim
+            num_groups, self.group_size, actual_head_dim
         )
         
         # Fit codebook on all group values

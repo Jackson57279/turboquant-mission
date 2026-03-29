@@ -732,7 +732,7 @@ the true attention score.
 
         # Correlation should be reasonably high (>0.5 indicates related signals)
         assert correlation > 0.5, \
-            f"Attention score correlation {correlation:.4f} too low, expected >0.5""
+            f"Attention score correlation {correlation:.4f} too low, expected >0.5"
     
     def test_compression_ratio_estimation(self):
         """Test compression ratio estimation."""

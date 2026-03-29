@@ -17,8 +17,8 @@ References:
 from __future__ import annotations
 
 import warnings
-from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Union
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 
 import torch
 import torch.nn.functional as F
@@ -32,6 +32,7 @@ try:
     import vllm
     from vllm import LLM, SamplingParams
     from vllm.kv_cache_utils import free_kv_cache
+
     VLLM_AVAILABLE = True
     VLLM_VERSION = getattr(vllm, "__version__", "unknown")
 except ImportError:
@@ -43,8 +44,7 @@ except ImportError:
     free_kv_cache = None  # type: ignore
 
 if TYPE_CHECKING:
-    from vllm import LLM as LLMType
-    from vllm import SamplingParams as SamplingParamsType
+    pass
 
 
 class TurboQuantKVCacheManager:
@@ -64,14 +64,14 @@ class TurboQuantKVCacheManager:
         num_layers: Number of transformer layers
         compression_ratio: Measured compression ratio
     """
-    
+
     def __init__(
         self,
         head_dim: int = 64,
         num_layers: int = 32,
         key_bits: int = 3,
         value_bits: int = 2,
-        key_proj_dim: Optional[int] = None,
+        key_proj_dim: int | None = None,
         value_group_size: int = 8,
         seed: int = 42,
     ) -> None:
@@ -92,7 +92,7 @@ class TurboQuantKVCacheManager:
         self.value_bits = value_bits
         self.key_proj_dim = key_proj_dim or (head_dim // 2)
         self.value_group_size = value_group_size
-        
+
         # Initialize quantizer
         self.quantizer = KVCacheQuantizer(
             head_dim=head_dim,
@@ -102,13 +102,13 @@ class TurboQuantKVCacheManager:
             value_group_size=value_group_size,
             seed=seed,
         )
-        
+
         # State tracking
         self._fitted = False
         self.compression_ratio: float = 0.0
-        self.compressed_cache: Dict[int, Dict[str, Any]] = {}
-        self.layer_shapes: Dict[int, Tuple[int, ...]] = {}
-    
+        self.compressed_cache: dict[int, dict[str, Any]] = {}
+        self.layer_shapes: dict[int, tuple[int, ...]] = {}
+
     def fit(
         self,
         sample_keys: torch.Tensor,
@@ -126,13 +126,13 @@ class TurboQuantKVCacheManager:
         self.quantizer.fit(sample_keys, sample_values)
         self._fitted = True
         return self
-    
+
     def compress_layer_cache(
         self,
         layer_idx: int,
         keys: torch.Tensor,
         values: torch.Tensor,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Compress KV cache for a specific layer.
         
         Args:
@@ -146,30 +146,30 @@ class TurboQuantKVCacheManager:
         if not self._fitted:
             # Auto-fit on first use
             self.fit(keys.flatten(0, -2), values.flatten(0, -2))
-        
+
         compressed = self.quantizer.compress_kv_cache(keys, values)
         self.compressed_cache[layer_idx] = compressed
         self.layer_shapes[layer_idx] = keys.shape
-        
+
         # Calculate compression ratio for this layer
         original_size = keys.numel() * 4 + values.numel() * 4  # float32
-        
+
         # Compressed sizes
         key_indices_size = compressed['key_indices'].numel() * compressed['metadata']['key_bits'] / 8
         key_codebook_size = compressed['key_codebook'].numel() * 4
         value_indices_size = compressed['value_indices'].numel() * compressed['metadata']['value_bits'] / 8
         value_codebook_size = compressed['value_codebook'].numel() * 4
-        
+
         compressed_size = key_indices_size + key_codebook_size + value_indices_size + value_codebook_size
-        
+
         self.compression_ratio = original_size / compressed_size if compressed_size > 0 else 0
-        
+
         return compressed
-    
+
     def decompress_layer_cache(
         self,
         layer_idx: int,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Decompress KV cache for a specific layer.
         
         Args:
@@ -180,15 +180,15 @@ class TurboQuantKVCacheManager:
         """
         if layer_idx not in self.compressed_cache:
             raise KeyError(f"No compressed cache found for layer {layer_idx}")
-        
+
         compressed = self.compressed_cache[layer_idx]
         return self.quantizer.decompress_kv_cache(compressed)
-    
+
     def compute_attention_with_compressed_keys(
         self,
         query: torch.Tensor,
         layer_idx: int,
-        compressed_values: Optional[torch.Tensor] = None,
+        compressed_values: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Compute attention scores using compressed keys.
         
@@ -205,28 +205,28 @@ class TurboQuantKVCacheManager:
         """
         if layer_idx not in self.compressed_cache:
             raise KeyError(f"No compressed cache found for layer {layer_idx}")
-        
+
         compressed = self.compressed_cache[layer_idx]
-        
+
         # Compute attention scores using QJL projection (unbiased estimator)
         scores = self.quantizer.key_compressor.compute_attention_score(
             query, compressed['key_indices']
         )
-        
+
         # Softmax
         attn_weights = F.softmax(scores, dim=-1)
-        
+
         # Decompress values if not provided
         if compressed_values is None:
             _, values = self.decompress_layer_cache(layer_idx)
         else:
             values = compressed_values
-        
+
         # Compute weighted sum
         output = torch.matmul(attn_weights, values)
-        
+
         return output
-    
+
     def free_layer_cache(self, layer_idx: int) -> None:
         """Free the compressed cache for a specific layer.
         
@@ -237,7 +237,7 @@ class TurboQuantKVCacheManager:
             del self.compressed_cache[layer_idx]
         if layer_idx in self.layer_shapes:
             del self.layer_shapes[layer_idx]
-    
+
     def free_all_cache(self) -> None:
         """Free all compressed KV cache memory."""
         self.compressed_cache.clear()
@@ -255,7 +255,7 @@ class TurboQuantAttentionWrapper:
         kv_manager: TurboQuantKVCacheManager instance
         layer_idx: Layer index
     """
-    
+
     def __init__(
         self,
         original_attention: Any,
@@ -272,7 +272,7 @@ class TurboQuantAttentionWrapper:
         self.original_attention = original_attention
         self.kv_manager = kv_manager
         self.layer_idx = layer_idx
-    
+
     def forward(
         self,
         query: torch.Tensor,
@@ -293,12 +293,12 @@ class TurboQuantAttentionWrapper:
         """
         # Compress keys and values
         self.kv_manager.compress_layer_cache(self.layer_idx, key, value)
-        
+
         # Compute attention with compressed keys (unbiased estimator)
         attn_output = self.kv_manager.compute_attention_with_compressed_keys(
             query, self.layer_idx
         )
-        
+
         return attn_output
 
 
@@ -322,7 +322,7 @@ class VLLMBackend(BaseBackend):
         >>> backend.initialize()
         >>> response = backend.generate("Hello, how are you?", max_tokens=50)
     """
-    
+
     def __init__(
         self,
         model_id: str,
@@ -345,27 +345,27 @@ class VLLMBackend(BaseBackend):
             **kwargs: Additional vLLM configuration options
         """
         super().__init__(model_id, **kwargs)
-        
+
         self.enable_kv_compression = enable_kv_compression
         self.kv_key_bits = kv_key_bits
         self.kv_value_bits = kv_value_bits
         self.kv_group_size = kv_group_size
         self.seed = seed
-        
+
         # vLLM-specific config
         self.temperature = kwargs.get("temperature", 0.7)
         self.top_p = kwargs.get("top_p", 0.9)
-        self.max_model_len = kwargs.get("max_model_len", None)
+        self.max_model_len = kwargs.get("max_model_len")
         self.gpu_memory_utilization = kwargs.get("gpu_memory_utilization", 0.9)
         self.dtype = kwargs.get("dtype", "auto")
         self.device = kwargs.get("device", "auto")
-        
+
         # State
-        self.llm: Optional[Any] = None
-        self.kv_manager: Optional[TurboQuantKVCacheManager] = None
-        self.config: Optional[AutoConfig] = None
+        self.llm: Any | None = None
+        self.kv_manager: TurboQuantKVCacheManager | None = None
+        self.config: AutoConfig | None = None
         self._initialized = False
-    
+
     def initialize(self) -> None:
         """Initialize the vLLM backend and load the model.
         
@@ -385,25 +385,25 @@ class VLLMBackend(BaseBackend):
                 "Note: vLLM may not be available for Python 3.14+. "
                 "Use Python 3.10-3.12 for full vLLM support."
             )
-        
+
         try:
             # Load model config
             self.config = AutoConfig.from_pretrained(self.model_id)
-            
+
             # Determine head dimension from config
             head_dim = getattr(
                 self.config,
                 "head_dim",
-                getattr(self.config, "hidden_size", 768) // 
+                getattr(self.config, "hidden_size", 768) //
                 getattr(self.config, "num_attention_heads", 12)
             )
-            
+
             num_layers = getattr(
                 self.config,
                 "num_hidden_layers",
                 getattr(self.config, "n_layer", 12)
             )
-            
+
             # Initialize TurboQuant KV cache manager
             if self.enable_kv_compression:
                 self.kv_manager = TurboQuantKVCacheManager(
@@ -414,7 +414,7 @@ class VLLMBackend(BaseBackend):
                     value_group_size=self.kv_group_size,
                     seed=self.seed,
                 )
-            
+
             # Initialize vLLM LLM
             llm_kwargs = {
                 "model": self.model_id,
@@ -423,25 +423,25 @@ class VLLMBackend(BaseBackend):
                 "dtype": self.dtype,
                 "seed": self.seed,
             }
-            
+
             if self.max_model_len:
                 llm_kwargs["max_model_len"] = self.max_model_len
-            
+
             # Add KV cache dtype configuration if using vLLM native quantization
             if self.enable_kv_compression and not self.kv_manager:
                 llm_kwargs["kv_cache_dtype"] = "fp8"
-            
+
             self.llm = LLM(**llm_kwargs)
-            
+
             # Apply TurboQuant monkey patches
             if self.enable_kv_compression and self.kv_manager:
                 self._apply_kv_cache_patches()
-            
+
             self._initialized = True
-            
+
         except Exception as e:
             raise RuntimeError(f"Failed to initialize vLLM backend: {e}") from e
-    
+
     def _apply_kv_cache_patches(self) -> None:
         """Apply monkey patches for TurboQuant KV cache integration.
         
@@ -449,7 +449,7 @@ class VLLMBackend(BaseBackend):
         """
         if not self.llm or not self.kv_manager:
             return
-        
+
         try:
             # Access the model's attention layers
             model = getattr(self.llm.llm_engine, "model_executor", None)
@@ -464,7 +464,7 @@ class VLLMBackend(BaseBackend):
                             self._patch_attention_layers(model_instance)
         except Exception as e:
             warnings.warn(f"Could not apply KV cache patches: {e}")
-    
+
     def _patch_attention_layers(self, model_instance: Any) -> None:
         """Patch attention layers in the model.
         
@@ -473,7 +473,7 @@ class VLLMBackend(BaseBackend):
         """
         # Find all attention modules
         attention_modules = []
-        
+
         if hasattr(model_instance, "model"):
             layers = getattr(model_instance.model, "layers", None)
             if layers:
@@ -484,14 +484,14 @@ class VLLMBackend(BaseBackend):
                         attn = getattr(layer, "attention", None)
                     if attn is None:
                         attn = getattr(layer, "attn", None)
-                    
+
                     if attn:
                         attention_modules.append((i, attn))
-        
+
         # Wrap each attention module
         for layer_idx, attn_module in attention_modules:
             original_forward = attn_module.forward
-            
+
             def make_turboquant_forward(
                 orig_forward: Any,
                 idx: int,
@@ -499,26 +499,26 @@ class VLLMBackend(BaseBackend):
             ) -> Any:
                 def turboquant_forward(
                     hidden_states: torch.Tensor,
-                    attention_mask: Optional[torch.Tensor] = None,
+                    attention_mask: torch.Tensor | None = None,
                     **kwargs: Any,
                 ) -> torch.Tensor:
                     # Intercept key/value computation
                     # Apply compression and use unbiased estimator
-                    
+
                     # Store original forward result for fallback
                     result = orig_forward(hidden_states, attention_mask, **kwargs)
-                    
+
                     return result
-                
+
                 return turboquant_forward
-            
+
             # Replace forward method
             attn_module._original_forward = original_forward
             attn_module.forward = make_turboquant_forward(
                 original_forward, layer_idx, self.kv_manager
             )
-    
-    def health(self) -> Dict[str, Any]:
+
+    def health(self) -> dict[str, Any]:
         """Return backend health status.
         
         Returns:
@@ -542,35 +542,35 @@ class VLLMBackend(BaseBackend):
             "compression_ratio": 0.0,
             "model_id": self.model_id,
         }
-        
+
         if not VLLM_AVAILABLE:
             health_info["error"] = "vLLM not installed"
             return health_info
-        
+
         if not self._initialized:
             health_info["error"] = "Backend not initialized"
             return health_info
-        
+
         if self.llm is None:
             health_info["error"] = "LLM instance not created"
             return health_info
-        
+
         health_info["status"] = "healthy"
-        
+
         if self.kv_manager:
             health_info["compression_ratio"] = self.kv_manager.compression_ratio
-        
+
         return health_info
-    
+
     def generate(
         self,
         prompt: str,
         max_tokens: int = 256,
         temperature: float = 0.7,
         top_p: float = 0.9,
-        stop: Optional[List[str]] = None,
+        stop: list[str] | None = None,
         stream: bool = False,
-    ) -> Union[Dict[str, Any], Iterator[Dict[str, Any]]]:
+    ) -> dict[str, Any] | Iterator[dict[str, Any]]:
         """Generate text completion.
         
         Args:
@@ -589,24 +589,24 @@ class VLLMBackend(BaseBackend):
         """
         if not self._initialized or self.llm is None:
             raise RuntimeError("Backend not initialized. Call initialize() first.")
-        
+
         sampling_params = SamplingParams(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
             stop=stop or [],
         )
-        
+
         if stream:
             return self._generate_stream(prompt, sampling_params)
         else:
             return self._generate_sync(prompt, sampling_params)
-    
+
     def _generate_sync(
         self,
         prompt: str,
         sampling_params: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Synchronous generation.
         
         Args:
@@ -617,7 +617,7 @@ class VLLMBackend(BaseBackend):
             Generated text as dict with choices array
         """
         outputs = self.llm.generate([prompt], sampling_params)
-        
+
         return {
             "id": "vllm-gen-" + str(hash(prompt))[:8],
             "object": "text_completion",
@@ -642,12 +642,12 @@ class VLLMBackend(BaseBackend):
                 ),
             },
         }
-    
+
     def _generate_stream(
         self,
         prompt: str,
         sampling_params: Any,
-    ) -> Iterator[Dict[str, Any]]:
+    ) -> Iterator[dict[str, Any]]:
         """Streaming generation.
         
         Args:
@@ -660,7 +660,7 @@ class VLLMBackend(BaseBackend):
         # vLLM's LLM.generate doesn't natively support streaming
         # We simulate streaming by generating and yielding chunks
         outputs = self.llm.generate([prompt], sampling_params)
-        
+
         if outputs and outputs[0].outputs:
             text = outputs[0].outputs[0].text
             # Yield word-by-word simulation
@@ -679,7 +679,7 @@ class VLLMBackend(BaseBackend):
                         }
                     ],
                 }
-            
+
             # Final chunk with finish reason
             yield {
                 "id": "vllm-chunk-final",
@@ -693,16 +693,16 @@ class VLLMBackend(BaseBackend):
                     }
                 ],
             }
-    
+
     def chat(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         max_tokens: int = 256,
         temperature: float = 0.7,
         top_p: float = 0.9,
-        stop: Optional[List[str]] = None,
+        stop: list[str] | None = None,
         stream: bool = False,
-    ) -> Union[Dict[str, Any], Iterator[Dict[str, Any]]]:
+    ) -> dict[str, Any] | Iterator[dict[str, Any]]:
         """Generate chat completion.
         
         Args:
@@ -721,23 +721,23 @@ class VLLMBackend(BaseBackend):
         """
         if not self._initialized or self.llm is None:
             raise RuntimeError("Backend not initialized. Call initialize() first.")
-        
+
         # Format messages into a prompt
         prompt = self._format_chat_messages(messages)
-        
+
         sampling_params = SamplingParams(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
             stop=stop or [],
         )
-        
+
         if stream:
             return self._chat_stream(prompt, sampling_params)
         else:
             return self._chat_sync(prompt, sampling_params)
-    
-    def _format_chat_messages(self, messages: List[Dict[str, str]]) -> str:
+
+    def _format_chat_messages(self, messages: list[dict[str, str]]) -> str:
         """Format chat messages into a prompt string.
         
         Args:
@@ -750,7 +750,7 @@ class VLLMBackend(BaseBackend):
         for msg in messages:
             role = msg.get("role", "user")
             content = msg.get("content", "")
-            
+
             if role == "system":
                 formatted.append(f"System: {content}")
             elif role == "user":
@@ -759,15 +759,15 @@ class VLLMBackend(BaseBackend):
                 formatted.append(f"Assistant: {content}")
             else:
                 formatted.append(f"{role}: {content}")
-        
+
         formatted.append("Assistant:")
         return "\n".join(formatted)
-    
+
     def _chat_sync(
         self,
         prompt: str,
         sampling_params: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Synchronous chat generation.
         
         Args:
@@ -778,7 +778,7 @@ class VLLMBackend(BaseBackend):
             Chat completion response
         """
         outputs = self.llm.generate([prompt], sampling_params)
-        
+
         return {
             "id": "vllm-chat-" + str(hash(prompt))[:8],
             "object": "chat.completion",
@@ -805,12 +805,12 @@ class VLLMBackend(BaseBackend):
                 ),
             },
         }
-    
+
     def _chat_stream(
         self,
         prompt: str,
         sampling_params: Any,
-    ) -> Iterator[Dict[str, Any]]:
+    ) -> Iterator[dict[str, Any]]:
         """Streaming chat generation.
         
         Args:
@@ -821,11 +821,11 @@ class VLLMBackend(BaseBackend):
             Stream chunks with delta content
         """
         outputs = self.llm.generate([prompt], sampling_params)
-        
+
         if outputs and outputs[0].outputs:
             text = outputs[0].outputs[0].text
             words = text.split(" ")
-            
+
             for i, word in enumerate(words):
                 content = word if i == 0 else " " + word
                 yield {
@@ -843,7 +843,7 @@ class VLLMBackend(BaseBackend):
                         }
                     ],
                 }
-            
+
             # Final chunk
             yield {
                 "id": "vllm-chat-chunk-final",
@@ -857,13 +857,13 @@ class VLLMBackend(BaseBackend):
                     }
                 ],
             }
-    
+
     def shutdown(self) -> None:
         """Shutdown vLLM backend and release resources."""
         if self.kv_manager:
             self.kv_manager.free_all_cache()
             self.kv_manager = None
-        
+
         if self.llm:
             # Free KV cache if available
             try:
@@ -871,12 +871,12 @@ class VLLMBackend(BaseBackend):
                     free_kv_cache()
             except Exception:
                 pass
-            
+
             # Clear the LLM instance
             self.llm = None
-        
+
         self._initialized = False
-    
+
     def free_kv_cache(self) -> None:
         """Free all KV cache memory.
         
@@ -886,7 +886,7 @@ class VLLMBackend(BaseBackend):
         # Free TurboQuant compressed cache
         if self.kv_manager:
             self.kv_manager.free_all_cache()
-        
+
         # Free vLLM native KV cache
         if free_kv_cache is not None:
             try:
@@ -895,18 +895,17 @@ class VLLMBackend(BaseBackend):
                 warnings.warn(f"Failed to free vLLM KV cache: {e}")
 
 
-class VLLMBackendStub:
+class VLLMBackendStub(BaseBackend):
     """Stub implementation for when vLLM is not available.
     
     This class provides the same interface as VLLMBackend but raises
     informative errors when vLLM is not installed.
     """
-    
+
     def __init__(self, model_id: str, **kwargs: Any) -> None:
         """Initialize stub."""
-        self.model_id = model_id
-        self.config = kwargs
-    
+        super().__init__(model_id, **kwargs)
+
     def initialize(self) -> None:
         """Raise error about missing vLLM."""
         raise RuntimeError(
@@ -914,8 +913,8 @@ class VLLMBackendStub:
             "Installation: pip install vllm\n"
             "Note: vLLM requires Python 3.10-3.12 and CUDA 11.8+ or ROCm"
         )
-    
-    def health(self) -> Dict[str, Any]:
+
+    def health(self) -> dict[str, Any]:
         """Return unhealthy status."""
         return {
             "status": "unhealthy",
@@ -926,21 +925,21 @@ class VLLMBackendStub:
             "error": "vLLM not installed",
             "model_id": self.model_id,
         }
-    
+
     def generate(self, *args: Any, **kwargs: Any) -> Any:
         """Raise error about missing vLLM."""
         self.initialize()  # Will raise the error
         return None
-    
+
     def chat(self, *args: Any, **kwargs: Any) -> Any:
         """Raise error about missing vLLM."""
         self.initialize()  # Will raise the error
         return None
-    
+
     def shutdown(self) -> None:
         """No-op for stub."""
         pass
-    
+
     def free_kv_cache(self) -> None:
         """No-op for stub."""
         pass
