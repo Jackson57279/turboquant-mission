@@ -1,3 +1,4 @@
+README.md
 pyproject.toml
 src/llm_compress/__init__.py
 src/llm_compress/cli.py

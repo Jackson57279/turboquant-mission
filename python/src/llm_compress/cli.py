@@ -46,8 +46,21 @@ def download(model_id: str, cache_dir: str | None, token: str | None) -> None:
     
     MODEL_ID is the HuggingFace model identifier (e.g., meta-llama/Llama-2-7b-hf).
     """
-    click.echo(f"Downloading {model_id}...")
-    click.echo("Note: This is a placeholder. Full implementation coming in cli-download-command.")
+    from llm_compress.download import download_model, DownloadError
+    
+    try:
+        model_path = download_model(
+            model_id=model_id,
+            cache_dir=cache_dir,
+            token=token,
+        )
+        click.echo(f"Model downloaded to: {model_path}")
+    except DownloadError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise click.ClickException(str(e))
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise click.ClickException(f"Download failed: {e}")
 
 
 @main.command()
