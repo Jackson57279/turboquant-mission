@@ -7,7 +7,11 @@ from typing import Any
 
 from llm_compress.backends.base import BaseBackend
 from llm_compress.backends.vllm import VLLM_AVAILABLE, VLLMBackend, VLLMBackendStub
-from llm_compress.backends.llama_cpp import LlamaCppBackend
+from llm_compress.backends.llama_cpp import (
+    LLAMA_CPP_AVAILABLE,
+    LlamaCppBackend,
+    LlamaCppBackendStub,
+)
 
 
 _BACKENDS: dict[str, type[BaseBackend]] = {}
@@ -19,8 +23,12 @@ else:
     # Register stub that will raise informative errors
     _BACKENDS["vllm"] = VLLMBackendStub  # type: ignore
 
-# Register llama.cpp backend
-_BACKENDS["llama-cpp"] = LlamaCppBackend
+# Register llama.cpp backend if available
+if LLAMA_CPP_AVAILABLE:
+    _BACKENDS["llama-cpp"] = LlamaCppBackend
+else:
+    # Register stub that will raise informative errors
+    _BACKENDS["llama-cpp"] = LlamaCppBackendStub  # type: ignore
 
 
 def get_backend(name: str, model_id: str, **kwargs: Any) -> BaseBackend:

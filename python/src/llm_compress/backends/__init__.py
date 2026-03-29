@@ -15,7 +15,14 @@ from llm_compress.backends.vllm import (
     TurboQuantAttentionWrapper,
     TurboQuantKVCacheManager,
 )
-from llm_compress.backends.llama_cpp import LlamaCppBackend
+from llm_compress.backends.llama_cpp import (
+    LLAMA_CPP_AVAILABLE,
+    LLAMA_CPP_VERSION,
+    LlamaCppBackend,
+    LlamaCppBackendClass,
+    LlamaCppBackendStub,
+    GGUFConverter,
+)
 from llm_compress.backends.registry import get_backend, list_backends
 
 __all__ = [
@@ -24,10 +31,15 @@ __all__ = [
     "VLLMBackendClass",
     "VLLMBackendStub",
     "LlamaCppBackend",
+    "LlamaCppBackendClass",
+    "LlamaCppBackendStub",
+    "GGUFConverter",
     "TurboQuantKVCacheManager",
     "TurboQuantAttentionWrapper",
     "get_backend",
     "list_backends",
     "VLLM_AVAILABLE",
     "VLLM_VERSION",
+    "LLAMA_CPP_AVAILABLE",
+    "LLAMA_CPP_VERSION",
 ]
