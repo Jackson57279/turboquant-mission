@@ -1,0 +1,84 @@
+{
+  "milestone": "core-python",
+  "round": 1,
+  "status": "pass",
+  "timestamp": "2026-03-29T22:34:00Z",
+  "assertionsSummary": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-CLI-001",
+    "VAL-CLI-002",
+    "VAL-CLI-003",
+    "VAL-CLI-011",
+    "VAL-CLI-012",
+    "VAL-CLI-013",
+    "VAL-CLI-014"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "assertionDetails": {
+    "VAL-CLI-001": {
+      "id": "VAL-CLI-001",
+      "description": "Model download command works",
+      "tool": "Execute shell command",
+      "testMethod": "Downloaded sshleifer/tiny-gpt2 model, verified exit code 0 and model files exist in cache",
+      "status": "passed",
+      "evidence": "Model files created in cache directory, exit code 0"
+    },
+    "VAL-CLI-002": {
+      "id": "VAL-CLI-002",
+      "description": "Model download with custom cache directory",
+      "tool": "Execute shell command",
+      "testMethod": "Used --cache-dir flag with temp directory, verified model saved to specified location",
+      "status": "passed",
+      "evidence": "Model files placed in specified cache directory instead of default ~/.cache/llm-compress/"
+    },
+    "VAL-CLI-003": {
+      "id": "VAL-CLI-003",
+      "description": "Invalid model ID returns error",
+      "tool": "Execute shell command",
+      "testMethod": "Attempted download of invalid/model/123, verified non-zero exit code",
+      "status": "passed",
+      "evidence": "Exit code 1, error message displayed"
+    },
+    "VAL-CLI-011": {
+      "id": "VAL-CLI-011",
+      "description": "List models command",
+      "tool": "Execute shell command",
+      "testMethod": "Tested empty cache and with model present",
+      "status": "passed",
+      "evidence": "Shows friendly message when empty, displays model table with sizes when models present"
+    },
+    "VAL-CLI-012": {
+      "id": "VAL-CLI-012",
+      "description": "Remove model command",
+      "tool": "Execute shell command",
+      "testMethod": "Downloaded model, then removed with --force flag, verified files deleted",
+      "status": "passed",
+      "evidence": "Model files removed from cache, no longer appears in list"
+    },
+    "VAL-CLI-013": {
+      "id": "VAL-CLI-013",
+      "description": "CLI help command",
+      "tool": "Execute shell command",
+      "testMethod": "Tested llm-compress --help and all subcommand helps",
+      "status": "passed",
+      "evidence": "Help shows all commands: download, quantize, serve, list, remove, tui with descriptions"
+    },
+    "VAL-CLI-014": {
+      "id": "VAL-CLI-014",
+      "description": "Version command",
+      "tool": "Execute shell command",
+      "testMethod": "Ran llm-compress --version",
+      "status": "passed",
+      "evidence": "Output: 'llm-compress, version 0.1.0' - semantic version format"
+    }
+  },
+  "appliedUpdates": [],
+  "notes": "All core-python CLI assertions passed. Testing was done using the Click testing framework with isolated temporary cache directories. The download test used sshleifer/tiny-gpt2 (17M parameter model) for fast, reliable testing.",
+  "previousRound": null
+}

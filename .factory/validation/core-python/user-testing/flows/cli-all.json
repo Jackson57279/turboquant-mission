@@ -1,0 +1,44 @@
+{
+  "milestone": "core-python",
+  "timestamp": null,
+  "assertions": {
+    "VAL-CLI-014": {
+      "status": "passed",
+      "exit_code": 0,
+      "output_preview": "llm-compress, version 0.1.0\n"
+    },
+    "VAL-CLI-013": {
+      "status": "passed",
+      "exit_code": 0,
+      "has_all_commands": true
+    },
+    "VAL-CLI-011-empty": {
+      "status": "passed",
+      "exit_code": 0
+    },
+    "VAL-CLI-003": {
+      "status": "passed",
+      "exit_code": 1
+    },
+    "VAL-CLI-001": {
+      "status": "failed",
+      "exit_code": 1,
+      "model_exists": false
+    },
+    "VAL-CLI-002": {
+      "status": "failed",
+      "cache_dir_used": "/tmp/tmp4ge995fw/cache",
+      "model_path": null
+    },
+    "VAL-CLI-011-with-model": {
+      "status": "failed",
+      "exit_code": 0,
+      "model_in_list": false
+    },
+    "VAL-CLI-012": {
+      "status": "failed",
+      "exit_code": 1,
+      "model_removed": true
+    }
+  }
+}
