@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 def _format_size(size_bytes: int) -> str:
     """Format byte size as human-readable string.
-    
+
     Args:
         size_bytes: Size in bytes.
-        
+
     Returns:
         Human-readable size string (e.g., "1.5 MB").
     """
@@ -41,7 +41,7 @@ def _format_size(size_bytes: int) -> str:
 @click.version_option(version=__version__, prog_name="llm-compress")
 def main() -> None:
     """LLM Compress: Unified LLM Quantization & Inference System.
-    
+
     This CLI provides commands for:
     - download: Download models from HuggingFace Hub
     - quantize: Quantize models to 4-bit or 8-bit weights
@@ -49,7 +49,7 @@ def main() -> None:
     - list: List downloaded models
     - remove: Remove a downloaded model
     - tui: Launch the terminal user interface
-    
+
     Examples:
         llm-compress download meta-llama/Llama-2-7b-hf
         llm-compress quantize meta-llama/Llama-2-7b-hf --bits 4
@@ -72,7 +72,7 @@ def main() -> None:
 )
 def download(model_id: str, cache_dir: str | None, token: str | None) -> None:
     """Download a model from HuggingFace Hub.
-    
+
     MODEL_ID is the HuggingFace model identifier (e.g., meta-llama/Llama-2-7b-hf).
     """
     from llm_compress.download import DownloadError, download_model
@@ -86,10 +86,10 @@ def download(model_id: str, cache_dir: str | None, token: str | None) -> None:
         click.echo(f"Model downloaded to: {model_path}")
     except DownloadError as e:
         click.echo(f"Error: {e}", err=True)
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
-        raise click.ClickException(f"Download failed: {e}")
+        raise click.ClickException(f"Download failed: {e}") from e
 
 
 @main.command()
@@ -112,13 +112,13 @@ def download(model_id: str, cache_dir: str | None, token: str | None) -> None:
 )
 def quantize(model_id: str, bits: str, kv_cache: bool, cache_dir: str | None) -> None:
     """Quantize a downloaded model.
-    
+
     MODEL_ID is the HuggingFace model identifier.
-    
+
     This command quantizes a previously downloaded model's weights to the
     specified bit width (4 or 8). The quantized model is saved alongside
     the original and can be used for efficient inference.
-    
+
     Examples:
         llm-compress quantize microsoft/DialoGPT-medium --bits 4
         llm-compress quantize meta-llama/Llama-2-7b-hf --bits 8 --kv-cache
@@ -174,9 +174,9 @@ def quantize(model_id: str, bits: str, kv_cache: bool, cache_dir: str | None) ->
         click.echo(f"  llm-compress serve {model_id}")
 
     except ValueError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
     except Exception as e:
-        raise click.ClickException(f"Quantization failed: {e}")
+        raise click.ClickException(f"Quantization failed: {e}") from e
 
 
 @main.command()
@@ -210,17 +210,17 @@ def quantize(model_id: str, bits: str, kv_cache: bool, cache_dir: str | None) ->
 )
 def serve(model_id: str, port: int, host: str, backend: str, cache_dir: str | None, kv_cache: bool) -> None:
     """Start the OpenAI-compatible API server.
-    
+
     MODEL_ID is the HuggingFace model identifier of the quantized model.
-    
+
     This command starts a FastAPI server that provides an OpenAI-compatible
     API for serving quantized models. The server supports:
-    
+
     - GET /health - Health check endpoint
     - GET /v1/models - List available models
     - POST /v1/chat/completions - Chat completions (with streaming support)
     - POST /v1/completions - Legacy text completions (with streaming support)
-    
+
     Examples:
         llm-compress serve microsoft/DialoGPT-medium
         llm-compress serve meta-llama/Llama-2-7b-hf --backend llama-cpp --port 8080
@@ -284,7 +284,7 @@ def serve(model_id: str, port: int, host: str, backend: str, cache_dir: str | No
         logger.info("FastAPI application created successfully")
     except Exception as e:
         logger.error(f"Failed to create server: {e}")
-        raise click.ClickException(f"Failed to create server: {e}")
+        raise click.ClickException(f"Failed to create server: {e}") from e
 
     click.echo(f"Starting API server at http://{host}:{port}")
     click.echo("Available endpoints:")
@@ -308,7 +308,7 @@ def serve(model_id: str, port: int, host: str, backend: str, cache_dir: str | No
         click.echo("\nServer stopped.")
     except Exception as e:
         logger.error(f"Server error: {e}")
-        raise click.ClickException(f"Server error: {e}")
+        raise click.ClickException(f"Server error: {e}") from e
 
 
 @main.command()
@@ -319,7 +319,7 @@ def serve(model_id: str, port: int, host: str, backend: str, cache_dir: str | No
 )
 def list(cache_dir: str | None) -> None:
     """List all downloaded models.
-    
+
     Displays a table showing model IDs, sizes, and download dates.
     Shows a friendly message if the cache is empty.
     """
@@ -381,12 +381,12 @@ def list(cache_dir: str | None) -> None:
 )
 def remove(model_id: str, cache_dir: str | None, force: bool) -> None:
     """Remove a downloaded model.
-    
+
     MODEL_ID is the HuggingFace model identifier.
-    
+
     This command deletes all files associated with the model from the cache,
     including the downloaded model files and metadata.
-    
+
     Examples:
         llm-compress remove microsoft/DialoGPT-medium
         llm-compress remove microsoft/DialoGPT-medium --force
@@ -404,9 +404,9 @@ def remove(model_id: str, cache_dir: str | None, force: bool) -> None:
         remove_cached_model(model_id, cache_dir=cache_dir)
         click.echo(f"Model '{model_id}' removed successfully.")
     except DownloadError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
     except Exception as e:
-        raise click.ClickException(f"Failed to remove model: {e}")
+        raise click.ClickException(f"Failed to remove model: {e}") from e
 
 
 @main.command()

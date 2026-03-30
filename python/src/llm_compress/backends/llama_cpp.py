@@ -51,11 +51,11 @@ logger = logging.getLogger(__name__)
 
 class GGUFConverter:
     """Converter from HuggingFace models to GGUF format.
-    
+
     This class handles the conversion of HuggingFace models to GGUF format
     using external conversion tools like llama.cpp's convert scripts or
     pre-converted GGUF files from HuggingFace Hub.
-    
+
     Attributes:
         model_id: HuggingFace model identifier
         output_dir: Directory for converted models
@@ -69,7 +69,7 @@ class GGUFConverter:
         quantization_type: str = "Q4_K_M",
     ) -> None:
         """Initialize the GGUF converter.
-        
+
         Args:
             model_id: HuggingFace model identifier
             output_dir: Directory for converted models (default: temp dir)
@@ -84,12 +84,12 @@ class GGUFConverter:
 
     def find_preconverted_gguf(self) -> str | None:
         """Search for pre-converted GGUF files on HuggingFace Hub.
-        
+
         Many models have GGUF variants uploaded by the community.
         Common patterns:
         - {model_name}-GGUF
         - {organization}/{model_name}-GGUF
-        
+
         Returns:
             Path to downloaded GGUF file or None if not found
         """
@@ -141,10 +141,10 @@ class GGUFConverter:
 
     def convert_hf_to_gguf(self) -> str | None:
         """Convert HuggingFace model to GGUF format.
-        
+
         Uses llama.cpp's convert_hf_to_gguf.py script or similar tools.
         Falls back to direct conversion if tools unavailable.
-        
+
         Returns:
             Path to converted GGUF file or None if conversion failed
         """
@@ -167,7 +167,7 @@ class GGUFConverter:
                 local_dir_use_symlinks=False,
             )
         except Exception as e:
-            raise RuntimeError(f"Failed to download model {self.model_id}: {e}")
+            raise RuntimeError(f"Failed to download model {self.model_id}: {e}") from e
 
         # Try to use llama.cpp's convert script
         output_gguf = os.path.join(
@@ -261,22 +261,22 @@ class GGUFConverter:
 
 class LlamaCppBackend(BaseBackend):
     """llama.cpp inference backend with GGUF support.
-    
+
     This backend uses llama.cpp for broad hardware support,
     including CPU inference and GGUF quantized models.
-    
+
     Features:
     - Native GGUF model loading
     - HuggingFace to GGUF conversion
     - Support for quantized models (Q4, Q5, Q8, etc.)
     - CPU and GPU (CUDA/Metal) inference
     - Streaming and non-streaming generation
-    
+
     Attributes:
         model_id: HuggingFace model identifier or path to GGUF file
         gguf_path: Path to GGUF model file
         llm: llama_cpp.Llama instance (when initialized)
-        
+
     Example:
         >>> backend = LlamaCppBackend(
         ...     model_id="microsoft/DialoGPT-medium",
@@ -299,7 +299,7 @@ class LlamaCppBackend(BaseBackend):
         **kwargs: Any,
     ) -> None:
         """Initialize llama.cpp backend.
-        
+
         Args:
             model_id: HuggingFace model identifier or path to GGUF file
             gguf_path: Direct path to GGUF file (skips conversion)
@@ -331,12 +331,12 @@ class LlamaCppBackend(BaseBackend):
 
     def initialize(self) -> None:
         """Initialize the llama.cpp backend and load the model.
-        
+
         This method:
         1. Checks for llama-cpp-python availability
         2. Converts HuggingFace model to GGUF if needed
         3. Loads the GGUF model with llama.cpp
-        
+
         Raises:
             RuntimeError: If llama-cpp-python is not installed
             RuntimeError: If model loading fails
@@ -398,7 +398,7 @@ class LlamaCppBackend(BaseBackend):
 
     def health(self) -> dict[str, Any]:
         """Return backend health status.
-        
+
         Returns:
             Dictionary with status information:
             - status: "healthy" or "unhealthy"
@@ -460,7 +460,7 @@ class LlamaCppBackend(BaseBackend):
         stream: bool = False,
     ) -> dict[str, Any] | Iterator[dict[str, Any]]:
         """Generate text completion.
-        
+
         Args:
             prompt: Input prompt text
             max_tokens: Maximum tokens to generate
@@ -468,10 +468,10 @@ class LlamaCppBackend(BaseBackend):
             top_p: Nucleus sampling parameter
             stop: Stop sequences
             stream: Whether to stream responses
-            
+
         Returns:
             Generated completion (dict) or stream of chunks (iterator)
-            
+
         Raises:
             RuntimeError: If backend not initialized
         """
@@ -575,7 +575,7 @@ class LlamaCppBackend(BaseBackend):
         stream: bool = False,
     ) -> dict[str, Any] | Iterator[dict[str, Any]]:
         """Generate chat completion.
-        
+
         Args:
             messages: List of chat messages with "role" and "content"
             max_tokens: Maximum tokens to generate
@@ -583,10 +583,10 @@ class LlamaCppBackend(BaseBackend):
             top_p: Nucleus sampling parameter
             stop: Stop sequences
             stream: Whether to stream responses
-            
+
         Returns:
             Generated chat completion (dict) or stream (iterator)
-            
+
         Raises:
             RuntimeError: If backend not initialized
         """
@@ -730,10 +730,7 @@ class LlamaCppBackendStub(BaseBackend):
 
 
 # Export the appropriate backend class
-if LLAMA_CPP_AVAILABLE:
-    LlamaCppBackendClass = LlamaCppBackend
-else:
-    LlamaCppBackendClass = LlamaCppBackendStub
+LlamaCppBackendClass = LlamaCppBackend if LLAMA_CPP_AVAILABLE else LlamaCppBackendStub
 
 
 __all__ = [

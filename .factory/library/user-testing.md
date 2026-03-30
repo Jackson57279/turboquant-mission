@@ -178,7 +178,76 @@ For integration tests (if time permits):
 
 ---
 
-## Validation Checklist
+## Flow Validator Guidance: CLI Surface
+
+### Isolation Boundaries
+- Use isolated cache directories via `--cache-dir` flag
+- Tests should not interfere with default `~/.cache/llm-compress/`
+- Each validator should use unique temp directories
+
+### Shared State to Avoid
+- Default cache directory (`~/.cache/llm-compress/`)
+- Global configuration files
+- Running server processes on standard ports
+
+### Constraints
+- Clean up temp directories after tests
+- Kill any server processes started during testing
+- Verify exit codes and stdout/stderr content
+
+---
+
+## Flow Validator Guidance: API Surface
+
+### Isolation Boundaries
+- Each validator must use a unique port (3200-3299 range)
+- Use `--port` flag to specify custom port
+- Server must be stopped after each test using kill command
+
+### Shared State to Avoid
+- Port conflicts - verify port is free before starting
+- Model cache can be shared (read-only)
+- Server process state - always cleanup
+
+### Constraints
+- Wait for `/health` endpoint to return 200 before testing
+- Use `lsof -ti :PORT | xargs kill -9` for cleanup
+- Set reasonable timeouts (30s for startup, 10s for requests)
+- Test with small models only (tiny-gpt2, DialoGPT-small)
+
+---
+
+## Flow Validator Guidance: Server Milestone
+
+### Setup Requirements
+1. Ensure `llm-compress` CLI is installed (`pip install -e .`)
+2. Use sshleifer/tiny-gpt2 or microsoft/DialoGPT-small as test models
+3. Ports 3200-3210 are reserved for server testing
+
+### Assertion Groups
+
+**CLI Serve Commands (VAL-CLI-007 through VAL-CLI-010, VAL-CLI-016):**
+- Test serve command starts server
+- Test different backends (vllm, llama-cpp)
+- Test custom port configuration
+- Each test uses unique port
+
+**API Endpoints (VAL-API-001 through VAL-API-014):**
+- Start server on specific port
+- Test all API endpoints
+- Verify JSON response formats
+- Stop server after tests
+
+### Evidence Collection
+- Save curl responses as JSON files
+- Capture server logs
+- Record port numbers used
+- Document any failures with exact error messages
+
+### Cleanup Requirements
+- Kill all server processes after testing
+- Remove any temp cache directories
+- Verify ports are released
 
 Before running validators:
 - [ ] Python environment set up

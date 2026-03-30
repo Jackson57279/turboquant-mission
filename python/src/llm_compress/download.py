@@ -23,10 +23,10 @@ class DownloadError(Exception):
 
 def get_cache_dir(cache_dir: str | Path | None = None) -> Path:
     """Get the cache directory for model downloads.
-    
+
     Args:
         cache_dir: Custom cache directory. If None, uses default.
-        
+
     Returns:
         Path to the cache directory.
     """
@@ -37,11 +37,11 @@ def get_cache_dir(cache_dir: str | Path | None = None) -> Path:
 
 def _get_model_dir(cache_dir: Path, model_id: str) -> Path:
     """Get the directory for a specific model.
-    
+
     Args:
         cache_dir: The root cache directory.
         model_id: The HuggingFace model identifier.
-        
+
     Returns:
         Path to the model's directory.
     """
@@ -52,11 +52,11 @@ def _get_model_dir(cache_dir: Path, model_id: str) -> Path:
 
 def get_model_dir(model_id: str, cache_dir: str | Path | None = None) -> Path:
     """Get the directory for a specific model (public API).
-    
+
     Args:
         model_id: The HuggingFace model identifier.
         cache_dir: Custom cache directory. If None, uses default.
-        
+
     Returns:
         Path to the model's directory.
     """
@@ -66,7 +66,7 @@ def get_model_dir(model_id: str, cache_dir: str | Path | None = None) -> Path:
 
 def _save_metadata(model_dir: Path, model_id: str, info: dict[str, Any]) -> None:
     """Save model metadata to the cache directory.
-    
+
     Args:
         model_dir: The model's cache directory.
         model_id: The HuggingFace model identifier.
@@ -83,7 +83,7 @@ def _save_metadata(model_dir: Path, model_id: str, info: dict[str, Any]) -> None
 
 def save_metadata(model_id: str, info: dict[str, Any], cache_dir: str | Path | None = None) -> None:
     """Save model metadata to the cache directory (public API).
-    
+
     Args:
         model_id: The HuggingFace model identifier.
         info: Model information to save.
@@ -97,10 +97,10 @@ def save_metadata(model_id: str, info: dict[str, Any], cache_dir: str | Path | N
 
 def _load_metadata(model_dir: Path) -> dict[str, Any] | None:
     """Load model metadata from the cache directory.
-    
+
     Args:
         model_dir: The model's cache directory.
-        
+
     Returns:
         Metadata dict if found, None otherwise.
     """
@@ -113,11 +113,11 @@ def _load_metadata(model_dir: Path) -> dict[str, Any] | None:
 
 def load_metadata(model_id: str, cache_dir: str | Path | None = None) -> dict[str, Any]:
     """Load model metadata from the cache directory (public API).
-    
+
     Args:
         model_id: The HuggingFace model identifier.
         cache_dir: Custom cache directory. If None, uses default.
-        
+
     Returns:
         Metadata dict if found, empty dict otherwise.
     """
@@ -133,22 +133,22 @@ def download_model(
     token: str | None = None,
 ) -> Path:
     """Download a model from HuggingFace Hub.
-    
+
     This function downloads a model and its configuration files from the
     HuggingFace Hub, displays a progress bar during download, and saves
     metadata alongside the files.
-    
+
     Args:
         model_id: The HuggingFace model identifier (e.g., microsoft/DialoGPT-medium).
         cache_dir: Custom cache directory. If None, uses default ~/.cache/llm-compress/.
         token: HuggingFace token for gated models. If None, uses HF_TOKEN env var.
-        
+
     Returns:
         Path to the downloaded model directory.
-        
+
     Raises:
         DownloadError: If the model doesn't exist or download fails.
-        
+
     Example:
         >>> model_path = download_model("microsoft/DialoGPT-medium")
         >>> print(model_path)
@@ -170,12 +170,12 @@ def download_model(
         api.model_info(model_id)
     except RepositoryNotFoundError:
         raise DownloadError(f"Model '{model_id}' not found on HuggingFace Hub. "
-                            "Please check the model ID and ensure it's correct.")
+                            "Please check the model ID and ensure it's correct.") from None
     except HfHubHTTPError as e:
         if e.response.status_code == 401:
             raise DownloadError(f"Model '{model_id}' requires authentication. "
-                                "Please provide a valid HuggingFace token.")
-        raise DownloadError(f"Error accessing HuggingFace Hub: {e}")
+                                "Please provide a valid HuggingFace token.") from e
+        raise DownloadError(f"Error accessing HuggingFace Hub: {e}") from e
 
     print(f"Downloading {model_id} from HuggingFace Hub...")
 
@@ -209,16 +209,16 @@ def download_model(
         if model_dir.exists():
             import shutil
             shutil.rmtree(model_dir, ignore_errors=True)
-        raise DownloadError(f"Failed to download model '{model_id}': {e}")
+        raise DownloadError(f"Failed to download model '{model_id}': {e}") from e
 
 
 def is_model_cached(model_id: str, cache_dir: str | Path | None = None) -> bool:
     """Check if a model is already cached locally.
-    
+
     Args:
         model_id: The HuggingFace model identifier.
         cache_dir: Custom cache directory. If None, uses default.
-        
+
     Returns:
         True if the model exists in cache with valid metadata.
     """
@@ -234,17 +234,17 @@ def is_model_cached(model_id: str, cache_dir: str | Path | None = None) -> bool:
 
 def remove_cached_model(model_id: str, cache_dir: str | Path | None = None) -> None:
     """Remove a model from the cache.
-    
+
     This function deletes all files associated with a model from the cache,
     including the downloaded model files and metadata.
-    
+
     Args:
         model_id: The HuggingFace model identifier (e.g., microsoft/DialoGPT-medium).
         cache_dir: Custom cache directory. If None, uses default.
-        
+
     Raises:
         DownloadError: If the model doesn't exist in cache or removal fails.
-        
+
     Example:
         >>> remove_cached_model("microsoft/DialoGPT-medium")
         >>> # Model files have been deleted
@@ -264,15 +264,15 @@ def remove_cached_model(model_id: str, cache_dir: str | Path | None = None) -> N
         import shutil
         shutil.rmtree(model_dir)
     except Exception as e:
-        raise DownloadError(f"Failed to remove model '{model_id}': {e}")
+        raise DownloadError(f"Failed to remove model '{model_id}': {e}") from e
 
 
 def list_cached_models(cache_dir: str | Path | None = None) -> list[dict[str, Any]]:
     """List all models currently in the cache.
-    
+
     Args:
         cache_dir: Custom cache directory. If None, uses default.
-        
+
     Returns:
         List of model metadata dictionaries.
     """

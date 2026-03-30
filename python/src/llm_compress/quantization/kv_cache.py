@@ -19,19 +19,19 @@ import math
 from typing import Any
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812
 
 
 class LloydMaxQuantizer:
     """Lloyd-Max optimal scalar quantization.
-    
+
     Implements the Lloyd-Max algorithm for generating optimal quantization
     codebooks that minimize mean squared error (MSE).
-    
+
     The algorithm iteratively:
     1. Updates centroids (codebook) as mean of each Voronoi cell
     2. Updates boundaries as midpoints between centroids
-    
+
     Attributes:
         num_bits: Number of bits for quantization
         num_levels: Number of quantization levels (2^num_bits)
@@ -40,7 +40,7 @@ class LloydMaxQuantizer:
 
     def __init__(self, num_bits: int = 3, max_iter: int = 100, tol: float = 1e-6) -> None:
         """Initialize Lloyd-Max quantizer.
-        
+
         Args:
             num_bits: Number of bits for quantization
             max_iter: Maximum iterations for Lloyd-Max algorithm
@@ -55,10 +55,10 @@ class LloydMaxQuantizer:
 
     def fit(self, data: torch.Tensor) -> "LloydMaxQuantizer":
         """Fit the Lloyd-Max quantizer on data.
-        
+
         Args:
             data: Input tensor of any shape, will be flattened
-            
+
         Returns:
             Self for method chaining
         """
@@ -82,7 +82,7 @@ class LloydMaxQuantizer:
 
         # Lloyd-Max iterations
         prev_mse = float('inf')
-        for iteration in range(self.max_iter):
+        for _iteration in range(self.max_iter):
             # Step 1: Find Voronoi cell boundaries (midpoints between centroids)
             boundaries = self._compute_boundaries(centroids)
 
@@ -156,10 +156,10 @@ class LloydMaxQuantizer:
 
     def quantize(self, tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Quantize a tensor using the fitted codebook.
-        
+
         Args:
             tensor: Input tensor to quantize
-            
+
         Returns:
             Tuple of (quantized_indices, codebook)
             quantized_indices contains integer indices into codebook
@@ -178,11 +178,11 @@ class LloydMaxQuantizer:
 
     def dequantize(self, indices: torch.Tensor, codebook: torch.Tensor) -> torch.Tensor:
         """Dequantize indices back to values using codebook.
-        
+
         Args:
             indices: Quantized indices
             codebook: Codebook tensor
-            
+
         Returns:
             Dequantized tensor
         """
@@ -191,11 +191,11 @@ class LloydMaxQuantizer:
 
 class OrthogonalRotation:
     """Random orthogonal rotation for dimensionality reduction.
-    
+
     Generates a random orthogonal matrix using QR decomposition of
     a random Gaussian matrix. Orthogonal rotations preserve vector norms:
     ||Rx|| = ||x|| for any vector x.
-    
+
     Attributes:
         dim: Input/output dimension
         rotation_matrix: Orthogonal matrix (dim x dim)
@@ -203,7 +203,7 @@ class OrthogonalRotation:
 
     def __init__(self, dim: int, seed: int | None = None) -> None:
         """Initialize orthogonal rotation.
-        
+
         Args:
             dim: Input/output dimension
             seed: Random seed for reproducibility
@@ -226,10 +226,10 @@ class OrthogonalRotation:
 
     def rotate(self, x: torch.Tensor) -> torch.Tensor:
         """Apply rotation to tensor.
-        
+
         Args:
             x: Input tensor of shape (..., dim)
-            
+
         Returns:
             Rotated tensor of same shape
         """
@@ -240,10 +240,10 @@ class OrthogonalRotation:
 
     def inverse_rotate(self, x: torch.Tensor) -> torch.Tensor:
         """Apply inverse rotation (transpose) to tensor.
-        
+
         Args:
             x: Input tensor of shape (..., dim)
-            
+
         Returns:
             Inverse-rotated tensor of same shape
         """
@@ -255,13 +255,13 @@ class OrthogonalRotation:
 
 class QJLProjection:
     """Quantized Johnson-Lindenstrauss (QJL) projection.
-    
+
     Implements QJL projection that preserves inner products between vectors
     while reducing dimensionality. The key property is:
     E[<Qx, Qy>] ≈ <x, y>
-    
+
     The projection uses random Gaussian projection followed by quantization.
-    
+
     Attributes:
         input_dim: Input dimension
         proj_dim: Projection dimension (compressed)
@@ -272,7 +272,7 @@ class QJLProjection:
     def __init__(self, input_dim: int, proj_dim: int, num_bits: int = 3,
                  seed: int | None = None) -> None:
         """Initialize QJL projection.
-        
+
         Args:
             input_dim: Original input dimension
             proj_dim: Target projection dimension (compressed)
@@ -298,17 +298,16 @@ class QJLProjection:
 
     def fit(self, data: torch.Tensor) -> "QJLProjection":
         """Fit the QJL projection on data.
-        
+
         This projects sample data and fits the Lloyd-Max quantizer.
-        
+
         Args:
             data: Sample tensor of shape (..., input_dim)
-            
+
         Returns:
             Self for method chaining
         """
         # Project sample data
-        original_shape = data.shape
         data_flat = data.reshape(-1, self.input_dim)
         projected = data_flat @ self.projection_matrix
 
@@ -320,10 +319,10 @@ class QJLProjection:
 
     def project(self, x: torch.Tensor) -> torch.Tensor:
         """Project and quantize tensor.
-        
+
         Args:
             x: Input tensor of shape (..., input_dim)
-            
+
         Returns:
             Quantized projected tensor as indices
         """
@@ -340,10 +339,10 @@ class QJLProjection:
 
     def project_float(self, x: torch.Tensor) -> torch.Tensor:
         """Project without quantization (for query vectors).
-        
+
         Args:
             x: Input tensor of shape (..., input_dim)
-            
+
         Returns:
             Projected tensor as float values
         """
@@ -354,10 +353,10 @@ class QJLProjection:
 
     def reconstruct(self, indices: torch.Tensor) -> torch.Tensor:
         """Reconstruct tensor from quantized projection.
-        
+
         Args:
             indices: Quantized indices of shape (..., proj_dim)
-            
+
         Returns:
             Approximated original tensor
         """
@@ -374,14 +373,14 @@ class QJLProjection:
 
 class TurboQuantKeyCompressor:
     """TurboQuant-style key compressor with MSE + QJL.
-    
+
     Compresses key vectors using:
     1. Orthogonal rotation (preserves norms)
     2. QJL projection (reduces dimension, preserves inner products)
     3. Lloyd-Max quantization (3-bit default)
-    
+
     The compression is designed to preserve cosine similarity for attention.
-    
+
     Attributes:
         head_dim: Dimension per attention head
         proj_dim: Compressed projection dimension
@@ -393,7 +392,7 @@ class TurboQuantKeyCompressor:
     def __init__(self, head_dim: int, proj_dim: int | None = None,
                  num_bits: int = 3, seed: int | None = None) -> None:
         """Initialize key compressor.
-        
+
         Args:
             head_dim: Original head dimension
             proj_dim: Target projection dimension (default: head_dim // 2)
@@ -411,10 +410,10 @@ class TurboQuantKeyCompressor:
 
     def fit(self, sample_keys: torch.Tensor) -> "TurboQuantKeyCompressor":
         """Fit compressor on sample key data.
-        
+
         Args:
             sample_keys: Sample keys of shape (..., head_dim)
-            
+
         Returns:
             Self for method chaining
         """
@@ -428,10 +427,10 @@ class TurboQuantKeyCompressor:
 
     def compress(self, keys: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Compress keys.
-        
+
         Args:
             keys: Key tensor of shape (batch, num_heads, seq_len, head_dim)
-            
+
         Returns:
             Tuple of (compressed_indices, codebook)
             compressed_indices has shape (batch, num_heads, seq_len, proj_dim)
@@ -446,10 +445,10 @@ class TurboQuantKeyCompressor:
 
     def decompress(self, indices: torch.Tensor) -> torch.Tensor:
         """Decompress keys.
-        
+
         Args:
             indices: Compressed indices
-            
+
         Returns:
             Approximated keys of shape (batch, num_heads, seq_len, head_dim)
         """
@@ -464,14 +463,14 @@ class TurboQuantKeyCompressor:
     def compute_attention_score(self, query: torch.Tensor,
                                compressed_keys: torch.Tensor) -> torch.Tensor:
         """Compute attention scores with compressed keys.
-        
+
         This uses the unbiased estimator: <q, k> ≈ <Rq, QJL(k)>
         where R is the orthogonal rotation and QJL is the quantized projection.
-        
+
         Args:
             query: Query tensor of shape (batch, num_heads, seq_len, head_dim)
             compressed_keys: Compressed key indices
-            
+
         Returns:
             Attention scores
         """
@@ -497,11 +496,11 @@ class TurboQuantKeyCompressor:
 
 class GroupValueQuantizer:
     """Group quantization for value vectors.
-    
+
     Groups value vectors and quantizes within each group using shared
 dictionary-based quantization. This is more efficient than per-vector
     quantization.
-    
+
     Attributes:
         head_dim: Dimension per head
         group_size: Number of vectors per group
@@ -511,7 +510,7 @@ dictionary-based quantization. This is more efficient than per-vector
 
     def __init__(self, head_dim: int, group_size: int = 8, num_bits: int = 2) -> None:
         """Initialize group value quantizer.
-        
+
         Args:
             head_dim: Dimension per attention head
             group_size: Number of vectors in each group
@@ -525,12 +524,12 @@ dictionary-based quantization. This is more efficient than per-vector
 
     def fit(self, sample_values: torch.Tensor) -> "GroupValueQuantizer":
         """Fit quantizer on sample values.
-        
+
         Fits a shared codebook on groups of values.
-        
+
         Args:
             sample_values: Sample values of shape (..., head_dim)
-            
+
         Returns:
             Self for method chaining
         """
@@ -573,10 +572,10 @@ dictionary-based quantization. This is more efficient than per-vector
 
     def quantize_group(self, group: torch.Tensor) -> torch.Tensor:
         """Quantize a group of value vectors.
-        
+
         Args:
             group: Group of values, shape (group_size, head_dim)
-            
+
         Returns:
             Quantized indices
         """
@@ -587,10 +586,10 @@ dictionary-based quantization. This is more efficient than per-vector
 
     def dequantize_group(self, indices: torch.Tensor) -> torch.Tensor:
         """Dequantize a group.
-        
+
         Args:
             indices: Quantized indices, shape (group_size, head_dim)
-            
+
         Returns:
             Dequantized values
         """
@@ -600,10 +599,10 @@ dictionary-based quantization. This is more efficient than per-vector
 
     def compress(self, values: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
         """Compress values with group quantization.
-        
+
         Args:
             values: Value tensor of shape (batch, num_heads, seq_len, head_dim)
-            
+
         Returns:
             Tuple of (compressed_indices, codebook, original_length)
         """
@@ -639,12 +638,12 @@ dictionary-based quantization. This is more efficient than per-vector
     def decompress(self, compressed: torch.Tensor, codebook: torch.Tensor,
                    original_length: int) -> torch.Tensor:
         """Decompress values.
-        
+
         Args:
             compressed: Compressed indices
             codebook: Codebook tensor
             original_length: Original sequence length
-            
+
         Returns:
             Dequantized values
         """
@@ -671,14 +670,14 @@ dictionary-based quantization. This is more efficient than per-vector
 
 class KVCacheQuantizer:
     """TurboQuant-style KV cache quantizer.
-    
+
     Implements 3-bit key compression and 2-bit/4-bit value compression
     using Lloyd-Max codebooks with QJL projection.
-    
+
     This is the main entry point for KV cache quantization. It combines
     the key compressor and value quantizer for end-to-end KV cache
     compression.
-    
+
     Attributes:
         key_bits: Bits for key quantization (default: 3)
         value_bits: Bits for value quantization (default: 2)
@@ -692,7 +691,7 @@ class KVCacheQuantizer:
                  value_bits: int = 2, key_proj_dim: int | None = None,
                  value_group_size: int = 8, seed: int | None = None) -> None:
         """Initialize the KV cache quantizer.
-        
+
         Args:
             head_dim: Dimension per attention head
             key_bits: Bits for key quantization (default 3)
@@ -726,11 +725,11 @@ class KVCacheQuantizer:
 
     def fit(self, sample_keys: torch.Tensor, sample_values: torch.Tensor) -> "KVCacheQuantizer":
         """Fit the quantizers on sample KV cache data.
-        
+
         Args:
             sample_keys: Sample key tensors of shape (..., head_dim)
             sample_values: Sample value tensors of shape (..., head_dim)
-            
+
         Returns:
             Self for method chaining
         """
@@ -745,11 +744,11 @@ class KVCacheQuantizer:
         values: torch.Tensor
     ) -> dict[str, Any]:
         """Compress KV cache tensors.
-        
+
         Args:
             keys: Key tensor of shape (batch, num_heads, seq_len, head_dim)
             values: Value tensor of shape (batch, num_heads, seq_len, head_dim)
-            
+
         Returns:
             Dictionary containing compressed data:
             {
@@ -788,10 +787,10 @@ class KVCacheQuantizer:
 
     def decompress_kv_cache(self, compressed: dict[str, Any]) -> tuple[torch.Tensor, torch.Tensor]:
         """Decompress KV cache from compressed representation.
-        
+
         Args:
             compressed: Dictionary from compress_kv_cache()
-            
+
         Returns:
             Tuple of (decompressed_keys, decompressed_values)
         """
@@ -816,17 +815,17 @@ class KVCacheQuantizer:
         mask: torch.Tensor | None = None
     ) -> torch.Tensor:
         """Compute attention with compressed KV cache.
-        
+
         Uses the unbiased estimator for key-query similarity and
         decompresses values for output computation.
-        
+
         Args:
             query: Query tensor of shape (batch, num_heads, seq_len, head_dim)
             compressed_keys: Compressed key indices
             compressed_values: Compressed value data
             key_codebook: Key codebook
             mask: Optional attention mask
-            
+
         Returns:
             Attention output tensor
         """
@@ -856,12 +855,12 @@ class KVCacheQuantizer:
 def compute_cosine_similarity(x: torch.Tensor, y: torch.Tensor,
                               dim: int = -1) -> torch.Tensor:
     """Compute cosine similarity between tensors.
-    
+
     Args:
         x: First tensor
         y: Second tensor
         dim: Dimension to compute similarity over
-        
+
     Returns:
         Cosine similarity tensor
     """
@@ -874,14 +873,14 @@ def estimate_compression_ratio(head_dim: int = 64, key_bits: int = 3,
                                 value_bits: int = 2, key_proj_dim: int | None = None,
                                 seq_len: int = 1024) -> dict[str, float]:
     """Estimate compression ratio for KV cache.
-    
+
     Args:
         head_dim: Original head dimension
         key_bits: Bits for key quantization
         value_bits: Bits for value quantization
         key_proj_dim: Compressed key dimension (default head_dim//2)
         seq_len: Sequence length for estimation
-        
+
     Returns:
         Dictionary with compression statistics
     """

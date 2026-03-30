@@ -21,7 +21,7 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812
 from transformers import AutoConfig
 
 from llm_compress.backends.base import BaseBackend
@@ -49,15 +49,15 @@ if TYPE_CHECKING:
 
 class TurboQuantKVCacheManager:
     """TurboQuant KV cache manager for vLLM integration.
-    
+
     This class wraps vLLM's KV cache with TurboQuant compression, providing:
     - Compression of keys and values during cache updates
     - Decompression during attention computation
     - Memory-efficient cache management
-    
+
     The manager maintains separate quantizers for keys and values, and handles
     the conversion between compressed and uncompressed formats.
-    
+
     Attributes:
         quantizer: KVCacheQuantizer instance for compression/decompression
         head_dim: Dimension per attention head
@@ -76,7 +76,7 @@ class TurboQuantKVCacheManager:
         seed: int = 42,
     ) -> None:
         """Initialize the TurboQuant KV cache manager.
-        
+
         Args:
             head_dim: Dimension per attention head
             num_layers: Number of transformer layers
@@ -115,11 +115,11 @@ class TurboQuantKVCacheManager:
         sample_values: torch.Tensor,
     ) -> TurboQuantKVCacheManager:
         """Fit the quantizer on sample KV cache data.
-        
+
         Args:
             sample_keys: Sample keys of shape (..., head_dim)
             sample_values: Sample values of shape (..., head_dim)
-            
+
         Returns:
             Self for method chaining
         """
@@ -134,12 +134,12 @@ class TurboQuantKVCacheManager:
         values: torch.Tensor,
     ) -> dict[str, Any]:
         """Compress KV cache for a specific layer.
-        
+
         Args:
             layer_idx: Layer index
             keys: Key tensor of shape (batch, num_heads, seq_len, head_dim)
             values: Value tensor of shape (batch, num_heads, seq_len, head_dim)
-            
+
         Returns:
             Dictionary containing compressed cache data
         """
@@ -171,10 +171,10 @@ class TurboQuantKVCacheManager:
         layer_idx: int,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Decompress KV cache for a specific layer.
-        
+
         Args:
             layer_idx: Layer index
-            
+
         Returns:
             Tuple of (decompressed_keys, decompressed_values)
         """
@@ -191,15 +191,15 @@ class TurboQuantKVCacheManager:
         compressed_values: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Compute attention scores using compressed keys.
-        
+
         Uses the unbiased estimator: <q, k> ≈ <Rq, QJL(k)>
         where R is the orthogonal rotation and QJL is the quantized projection.
-        
+
         Args:
             query: Query tensor of shape (batch, num_heads, seq_len, head_dim)
             layer_idx: Layer index
             compressed_values: Optional pre-decompressed values
-            
+
         Returns:
             Attention output tensor
         """
@@ -229,7 +229,7 @@ class TurboQuantKVCacheManager:
 
     def free_layer_cache(self, layer_idx: int) -> None:
         """Free the compressed cache for a specific layer.
-        
+
         Args:
             layer_idx: Layer index to free
         """
@@ -246,10 +246,10 @@ class TurboQuantKVCacheManager:
 
 class TurboQuantAttentionWrapper:
     """Wrapper for vLLM attention layers to use TurboQuant compression.
-    
+
     This wrapper intercepts attention layer calls and applies TurboQuant
     compression/decompression transparently.
-    
+
     Attributes:
         original_attention: Original vLLM attention module
         kv_manager: TurboQuantKVCacheManager instance
@@ -263,7 +263,7 @@ class TurboQuantAttentionWrapper:
         layer_idx: int,
     ) -> None:
         """Initialize attention wrapper.
-        
+
         Args:
             original_attention: Original vLLM attention module
             kv_manager: KV cache manager instance
@@ -281,13 +281,13 @@ class TurboQuantAttentionWrapper:
         **kwargs: Any,
     ) -> torch.Tensor:
         """Forward pass with TurboQuant compression.
-        
+
         Args:
             query: Query tensor
             key: Key tensor
             value: Value tensor
             **kwargs: Additional arguments for attention
-            
+
         Returns:
             Attention output
         """
@@ -304,15 +304,15 @@ class TurboQuantAttentionWrapper:
 
 class VLLMBackend(BaseBackend):
     """vLLM inference backend with TurboQuant integration.
-    
+
     This backend uses vLLM for high-throughput GPU inference and integrates
     TurboQuant KV cache compression for memory efficiency.
-    
+
     Attributes:
         model_id: HuggingFace model identifier
         kv_quantizer: Optional KV cache quantizer
         llm: vLLM LLM instance (when initialized)
-        
+
     Example:
         >>> backend = VLLMBackend(
         ...     model_id="microsoft/DialoGPT-medium",
@@ -334,7 +334,7 @@ class VLLMBackend(BaseBackend):
         **kwargs: Any,
     ) -> None:
         """Initialize vLLM backend.
-        
+
         Args:
             model_id: HuggingFace model identifier
             enable_kv_compression: Whether to enable TurboQuant KV cache compression
@@ -368,13 +368,13 @@ class VLLMBackend(BaseBackend):
 
     def initialize(self) -> None:
         """Initialize the vLLM backend and load the model.
-        
+
         This method:
         1. Loads the model configuration
         2. Initializes vLLM LLM engine
         3. Sets up TurboQuant KV cache manager if enabled
         4. Applies monkey patches for KV cache integration
-        
+
         Raises:
             RuntimeError: If vLLM is not installed
             RuntimeError: If model loading fails
@@ -444,7 +444,7 @@ class VLLMBackend(BaseBackend):
 
     def _apply_kv_cache_patches(self) -> None:
         """Apply monkey patches for TurboQuant KV cache integration.
-        
+
         This method patches vLLM's attention layers to use TurboQuant compression.
         """
         if not self.llm or not self.kv_manager:
@@ -463,11 +463,11 @@ class VLLMBackend(BaseBackend):
                             # Patch attention layers
                             self._patch_attention_layers(model_instance)
         except Exception as e:
-            warnings.warn(f"Could not apply KV cache patches: {e}")
+            warnings.warn(f"Could not apply KV cache patches: {e}", stacklevel=2)
 
     def _patch_attention_layers(self, model_instance: Any) -> None:
         """Patch attention layers in the model.
-        
+
         Args:
             model_instance: The model instance to patch
         """
@@ -520,7 +520,7 @@ class VLLMBackend(BaseBackend):
 
     def health(self) -> dict[str, Any]:
         """Return backend health status.
-        
+
         Returns:
             Dictionary with status information:
             - status: "healthy" or "unhealthy"
@@ -572,7 +572,7 @@ class VLLMBackend(BaseBackend):
         stream: bool = False,
     ) -> dict[str, Any] | Iterator[dict[str, Any]]:
         """Generate text completion.
-        
+
         Args:
             prompt: Input prompt text
             max_tokens: Maximum tokens to generate
@@ -580,10 +580,10 @@ class VLLMBackend(BaseBackend):
             top_p: Nucleus sampling parameter
             stop: Stop sequences
             stream: Whether to stream responses
-            
+
         Returns:
             Generated completion (dict) or stream of chunks (iterator)
-            
+
         Raises:
             RuntimeError: If backend not initialized
         """
@@ -608,11 +608,11 @@ class VLLMBackend(BaseBackend):
         sampling_params: Any,
     ) -> dict[str, Any]:
         """Synchronous generation.
-        
+
         Args:
             prompt: Input prompt
             sampling_params: vLLM sampling parameters
-            
+
         Returns:
             Generated text as dict with choices array
         """
@@ -649,11 +649,11 @@ class VLLMBackend(BaseBackend):
         sampling_params: Any,
     ) -> Iterator[dict[str, Any]]:
         """Streaming generation.
-        
+
         Args:
             prompt: Input prompt
             sampling_params: vLLM sampling parameters
-            
+
         Yields:
             Stream chunks with delta content
         """
@@ -704,7 +704,7 @@ class VLLMBackend(BaseBackend):
         stream: bool = False,
     ) -> dict[str, Any] | Iterator[dict[str, Any]]:
         """Generate chat completion.
-        
+
         Args:
             messages: List of chat messages with "role" and "content"
             max_tokens: Maximum tokens to generate
@@ -712,10 +712,10 @@ class VLLMBackend(BaseBackend):
             top_p: Nucleus sampling parameter
             stop: Stop sequences
             stream: Whether to stream responses
-            
+
         Returns:
             Generated chat completion (dict) or stream (iterator)
-            
+
         Raises:
             RuntimeError: If backend not initialized
         """
@@ -739,10 +739,10 @@ class VLLMBackend(BaseBackend):
 
     def _format_chat_messages(self, messages: list[dict[str, str]]) -> str:
         """Format chat messages into a prompt string.
-        
+
         Args:
             messages: List of messages with "role" and "content"
-            
+
         Returns:
             Formatted prompt string
         """
@@ -769,11 +769,11 @@ class VLLMBackend(BaseBackend):
         sampling_params: Any,
     ) -> dict[str, Any]:
         """Synchronous chat generation.
-        
+
         Args:
             prompt: Formatted prompt
             sampling_params: vLLM sampling parameters
-            
+
         Returns:
             Chat completion response
         """
@@ -812,11 +812,11 @@ class VLLMBackend(BaseBackend):
         sampling_params: Any,
     ) -> Iterator[dict[str, Any]]:
         """Streaming chat generation.
-        
+
         Args:
             prompt: Formatted prompt
             sampling_params: vLLM sampling parameters
-            
+
         Yields:
             Stream chunks with delta content
         """
@@ -879,7 +879,7 @@ class VLLMBackend(BaseBackend):
 
     def free_kv_cache(self) -> None:
         """Free all KV cache memory.
-        
+
         This method can be called manually to release memory between requests,
         and is also called automatically during shutdown.
         """
@@ -892,12 +892,12 @@ class VLLMBackend(BaseBackend):
             try:
                 free_kv_cache()
             except Exception as e:
-                warnings.warn(f"Failed to free vLLM KV cache: {e}")
+                warnings.warn(f"Failed to free vLLM KV cache: {e}", stacklevel=2)
 
 
 class VLLMBackendStub(BaseBackend):
     """Stub implementation for when vLLM is not available.
-    
+
     This class provides the same interface as VLLMBackend but raises
     informative errors when vLLM is not installed.
     """
@@ -946,12 +946,7 @@ class VLLMBackendStub(BaseBackend):
 
 
 # Export the appropriate backend class
-if VLLM_AVAILABLE:
-    # Use the real implementation
-    VLLMBackendClass = VLLMBackend
-else:
-    # Use the stub
-    VLLMBackendClass = VLLMBackendStub
+VLLMBackendClass = VLLMBackend if VLLM_AVAILABLE else VLLMBackendStub
 
 
 __all__ = [

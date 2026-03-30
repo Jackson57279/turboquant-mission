@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class ChatMessage(BaseModel):
     """A single chat message.
-    
+
     Attributes:
         role: The role of the message author (system, user, assistant)
         content: The content of the message
@@ -40,7 +40,7 @@ class ChatMessage(BaseModel):
 
 class ChatCompletionRequest(BaseModel):
     """Chat completion request model.
-    
+
     Attributes:
         model: ID of the model to use
         messages: List of messages comprising the conversation
@@ -114,7 +114,7 @@ class ChatCompletionRequest(BaseModel):
 
 class ChatCompletionChoice(BaseModel):
     """A single chat completion choice.
-    
+
     Attributes:
         index: Index of this choice
         message: The generated message
@@ -130,7 +130,7 @@ class ChatCompletionChoice(BaseModel):
 
 class ChatCompletionChunkChoice(BaseModel):
     """A streaming chat completion chunk choice.
-    
+
     Attributes:
         index: Index of this choice
         delta: The delta content for this chunk
@@ -149,7 +149,7 @@ class ChatCompletionChunkChoice(BaseModel):
 
 class UsageInfo(BaseModel):
     """Token usage information.
-    
+
     Attributes:
         prompt_tokens: Tokens in the prompt
         completion_tokens: Tokens in the completion
@@ -162,7 +162,7 @@ class UsageInfo(BaseModel):
 
 class ChatCompletionResponse(BaseModel):
     """Chat completion response model.
-    
+
     Attributes:
         id: Unique identifier for this completion
         object: Object type (always "chat.completion")
@@ -187,7 +187,7 @@ class ChatCompletionResponse(BaseModel):
 
 class ChatCompletionChunk(BaseModel):
     """Streaming chat completion chunk model.
-    
+
     Attributes:
         id: Unique identifier for this completion
         object: Object type (always "chat.completion.chunk")
@@ -215,7 +215,7 @@ class ChatCompletionChunk(BaseModel):
 
 class CompletionRequest(BaseModel):
     """Legacy text completion request model.
-    
+
     Attributes:
         model: ID of the model to use
         prompt: The prompt(s) to generate completions for
@@ -284,7 +284,7 @@ class CompletionRequest(BaseModel):
 
 class CompletionChoice(BaseModel):
     """A single text completion choice.
-    
+
     Attributes:
         index: Index of this choice
         text: The generated text
@@ -305,7 +305,7 @@ class CompletionChoice(BaseModel):
 
 class CompletionChunkChoice(BaseModel):
     """A streaming text completion chunk choice.
-    
+
     Attributes:
         index: Index of this choice
         text: The generated text chunk
@@ -321,7 +321,7 @@ class CompletionChunkChoice(BaseModel):
 
 class CompletionResponse(BaseModel):
     """Text completion response model.
-    
+
     Attributes:
         id: Unique identifier for this completion
         object: Object type (always "text_completion")
@@ -346,7 +346,7 @@ class CompletionResponse(BaseModel):
 
 class CompletionChunk(BaseModel):
     """Streaming text completion chunk model.
-    
+
     Attributes:
         id: Unique identifier for this completion
         object: Object type (always "text_completion.chunk")
@@ -374,7 +374,7 @@ class CompletionChunk(BaseModel):
 
 class ModelInfo(BaseModel):
     """Information about a model.
-    
+
     Attributes:
         id: Model identifier
         object: Object type (always "model")
@@ -389,7 +389,7 @@ class ModelInfo(BaseModel):
 
 class ModelListResponse(BaseModel):
     """Response from the models endpoint.
-    
+
     Attributes:
         object: Object type (always "list")
         data: List of available models
@@ -405,7 +405,7 @@ class ModelListResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     """Health check response.
-    
+
     Attributes:
         status: Server status (healthy or unhealthy)
         model: Model being served
@@ -423,7 +423,7 @@ class HealthResponse(BaseModel):
 
 class ErrorDetail(BaseModel):
     """Error detail model.
-    
+
     Attributes:
         message: Error message
         type: Error type
@@ -438,7 +438,7 @@ class ErrorDetail(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Error response model.
-    
+
     Attributes:
         error: Error details
     """

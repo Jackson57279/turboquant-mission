@@ -32,15 +32,15 @@ else:
 
 def get_backend(name: str, model_id: str, **kwargs: Any) -> BaseBackend:
     """Get a backend instance by name.
-    
+
     Args:
         name: Backend name ("vllm" or "llama-cpp")
         model_id: HuggingFace model identifier
         **kwargs: Backend-specific configuration
-        
+
     Returns:
         Backend instance
-        
+
     Raises:
         ValueError: If backend name is unknown
     """
@@ -55,7 +55,7 @@ def get_backend(name: str, model_id: str, **kwargs: Any) -> BaseBackend:
 
 def list_backends() -> list[str]:
     """List available backend names.
-    
+
     Returns:
         List of backend names
     """

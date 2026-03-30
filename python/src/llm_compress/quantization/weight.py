@@ -30,17 +30,17 @@ from llm_compress.download import get_model_dir, load_metadata, save_metadata
 
 def quantize_tensor(tensor: torch.Tensor, bits: int = 4) -> tuple[torch.Tensor, Any, tuple]:
     """Quantize a single tensor to specified bit width.
-    
+
     Args:
         tensor: Input tensor to quantize (must be 2D or can be reshaped to 2D)
         bits: Quantization bit width (4 or 8)
-        
+
     Returns:
         Tuple of (quantized_tensor, quantization_state, original_shape)
-        
+
     Raises:
         ValueError: If bits is not 4 or 8
-        
+
     Example:
         >>> weight = torch.randn(512, 512)
         >>> qweight, qstate, shape = quantize_tensor(weight, bits=4)
@@ -79,16 +79,16 @@ def dequantize_tensor(
     bits: int = 4
 ) -> torch.Tensor:
     """Dequantize a tensor from its quantized representation.
-    
+
     Args:
         quantized: Quantized tensor data
         qstate: Quantization state (absmax, blocksize, etc.)
         original_shape: Original shape of the tensor before quantization
         bits: Quantization bit width (4 or 8)
-        
+
     Returns:
         Dequantized tensor with original shape
-        
+
     Raises:
         ValueError: If bits is not 4 or 8
     """
@@ -110,19 +110,19 @@ def quantize_model_state_dict(
     quantize_linear_only: bool = True
 ) -> dict[str, Any]:
     """Quantize all weight tensors in a model state dict.
-    
+
     Args:
         state_dict: Model state dictionary from HuggingFace
         bits: Quantization bit width (4 or 8)
         quantize_linear_only: If True, only quantize linear layer weights
             (those containing 'weight' in name and are 2D+ tensors)
-            
+
     Returns:
         Dictionary containing:
             - quantized_tensors: dict of quantized weight tensors
             - quantization_metadata: dict with per-tensor quantization info
             - non_quantized: dict of tensors that weren't quantized
-            
+
     Note:
         Non-weight tensors (embeddings, biases, layer norms, etc.) are not
         quantized to preserve model accuracy.
@@ -175,20 +175,20 @@ def save_quantized_model(
     bits: int = 4
 ) -> Path:
     """Save quantized model to custom format using safetensors.
-    
+
     The custom format consists of:
         - model.safetensors: Quantized and non-quantized tensors
         - quantization_config.json: Quantization metadata and config
-        
+
     Args:
         quantized_data: Output from quantize_model_state_dict()
         output_dir: Directory to save the quantized model
         model_id: Original model identifier
         bits: Quantization bit width
-        
+
     Returns:
         Path to the output directory
-        
+
     Note:
         Safetensors format provides fast loading and is safe from pickle
         deserialization attacks.
@@ -223,16 +223,16 @@ def save_quantized_model(
 
 def load_quantized_model(model_dir: str | Path) -> dict[str, Any]:
     """Load a quantized model from custom format.
-    
+
     Args:
         model_dir: Directory containing the quantized model
-        
+
     Returns:
         Dictionary with:
             - tensors: dict of loaded tensors (quantized and non-quantized)
             - config: quantization configuration
             - quantized_names: list of quantized tensor names
-            
+
     Raises:
         FileNotFoundError: If model files don't exist
         ValueError: If format version is incompatible
@@ -269,11 +269,11 @@ def dequantize_model(
     dequantize_to_dtype: torch.dtype | None = None
 ) -> dict[str, torch.Tensor]:
     """Dequantize all quantized tensors in a loaded model.
-    
+
     Args:
         model_data: Output from load_quantized_model()
         dequantize_to_dtype: Target dtype for dequantized tensors (default: float32)
-        
+
     Returns:
         State dict with all tensors dequantized to specified dtype
     """
@@ -320,22 +320,22 @@ def quantize_model(
     output_suffix: str | None = None
 ) -> Path:
     """Quantize a downloaded HuggingFace model.
-    
+
     This is the main entry point for model quantization from the CLI.
-    
+
     Args:
         model_id: HuggingFace model identifier (e.g., 'microsoft/DialoGPT-medium')
         bits: Quantization bit width (4 or 8)
         cache_dir: Custom cache directory (default: ~/.cache/llm-compress)
         output_suffix: Suffix for output directory (default: 'quantized-{bits}bit')
-        
+
     Returns:
         Path to the quantized model directory
-        
+
     Raises:
         ValueError: If model not found in cache or bits not supported
         RuntimeError: If quantization fails
-        
+
     Example:
         >>> from llm_compress.quantization import quantize_model
         >>> quantized_path = quantize_model('microsoft/DialoGPT-medium', bits=4)
@@ -397,13 +397,13 @@ def quantize_model(
 
 def get_compression_ratio(model_dir: str | Path) -> float:
     """Calculate the compression ratio of a quantized model.
-    
+
     Args:
         model_dir: Directory containing the quantized model
-        
+
     Returns:
         Compression ratio (original_size / quantized_size)
-        
+
     Note:
         This estimates the original size based on the quantized metadata.
         For accurate measurement, compare against the original model files.
@@ -422,13 +422,10 @@ def get_compression_ratio(model_dir: str | Path) -> float:
         if meta.get('quantized', False):
             # Original was float32 (4 bytes per element)
             original_bytes = tensor.numel() * 4
-            if meta['bits'] == 4:
-                # 4-bit quantization packs 2 values per byte
-                # but has overhead from absmax values
-                quantized_bytes = tensor_bytes
-            else:
-                # 8-bit quantization: 1 byte per element + absmax overhead
-                quantized_bytes = tensor_bytes
+            # Both 4-bit and 8-bit quantization use the same tensor_bytes calculation
+            # 4-bit packs 2 values per byte (with absmax overhead)
+            # 8-bit uses 1 byte per element (with absmax overhead)
+            quantized_bytes = tensor_bytes
         else:
             original_bytes = tensor_bytes
             quantized_bytes = tensor_bytes
@@ -441,13 +438,13 @@ def get_compression_ratio(model_dir: str | Path) -> float:
 
 def estimate_accuracy_loss(bits: int) -> float:
     """Estimate expected accuracy loss from quantization.
-    
+
     Args:
         bits: Quantization bit width (4 or 8)
-        
+
     Returns:
         Estimated accuracy loss percentage
-        
+
     Note:
         These are approximate values based on literature:
         - 4-bit: typically <1% accuracy loss

@@ -10,14 +10,14 @@ from typing import Any
 
 class BaseBackend(ABC):
     """Abstract base class for inference backends.
-    
+
     All backends (vLLM, llama.cpp) must implement this interface
     to be used by the API server.
     """
 
     def __init__(self, model_id: str, **kwargs: Any) -> None:
         """Initialize the backend.
-        
+
         Args:
             model_id: HuggingFace model identifier
             **kwargs: Backend-specific configuration
@@ -33,7 +33,7 @@ class BaseBackend(ABC):
     @abstractmethod
     def health(self) -> dict[str, Any]:
         """Return backend health status.
-        
+
         Returns:
             Dictionary with status information
         """
@@ -50,7 +50,7 @@ class BaseBackend(ABC):
         stream: bool = False,
     ) -> dict[str, Any] | Iterator[dict[str, Any]]:
         """Generate text completion.
-        
+
         Args:
             prompt: Input prompt text
             max_tokens: Maximum tokens to generate
@@ -58,7 +58,7 @@ class BaseBackend(ABC):
             top_p: Nucleus sampling parameter
             stop: Stop sequences
             stream: Whether to stream responses
-            
+
         Returns:
             Generated completion (dict) or stream of chunks (iterator)
         """
@@ -75,7 +75,7 @@ class BaseBackend(ABC):
         stream: bool = False,
     ) -> dict[str, Any] | Iterator[dict[str, Any]]:
         """Generate chat completion.
-        
+
         Args:
             messages: List of chat messages
             max_tokens: Maximum tokens to generate
@@ -83,7 +83,7 @@ class BaseBackend(ABC):
             top_p: Nucleus sampling parameter
             stop: Stop sequences
             stream: Whether to stream responses
-            
+
         Returns:
             Generated completion (dict) or stream of chunks (iterator)
         """

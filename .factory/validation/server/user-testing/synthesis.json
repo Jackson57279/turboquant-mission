@@ -1,0 +1,95 @@
+{
+  "milestone": "server",
+  "round": 1,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 16,
+    "passed": 7,
+    "failed": 9,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-CLI-007",
+    "VAL-CLI-008",
+    "VAL-CLI-009",
+    "VAL-CLI-010",
+    "VAL-CLI-016",
+    "VAL-API-001",
+    "VAL-API-010"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-API-002",
+      "reason": "Chat completions non-streaming returns 503 error due to vLLM backend initialization failure - vLLM not fully installed/configured"
+    },
+    {
+      "id": "VAL-API-003",
+      "reason": "Chat completions streaming returns 503 error due to vLLM backend initialization failure"
+    },
+    {
+      "id": "VAL-API-004",
+      "reason": "Chat completions with system message returns 503 error - backend not fully functional"
+    },
+    {
+      "id": "VAL-API-005",
+      "reason": "Chat completions with temperature returns 503 error - backend not fully functional"
+    },
+    {
+      "id": "VAL-API-006",
+      "reason": "Chat completions with max_tokens returns 503 error - backend not fully functional"
+    },
+    {
+      "id": "VAL-API-007",
+      "reason": "Chat completions with stop sequences returns 503 error - backend not fully functional"
+    },
+    {
+      "id": "VAL-API-012",
+      "reason": "Invalid model ID error handling not returning proper 404 - returns 503 backend error instead"
+    },
+    {
+      "id": "VAL-API-013",
+      "reason": "Invalid JSON error handling not returning proper 400 - need to test request parsing"
+    },
+    {
+      "id": "VAL-API-014",
+      "reason": "Missing required fields error handling not returning proper 422 - need to test validation"
+    }
+  ],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Added Flow Validator Guidance sections for CLI Surface, API Surface, and Server Milestone with isolation rules and port constraints",
+      "source": "setup"
+    }
+  ],
+  "testDetails": {
+    "cliServeTests": {
+      "modelUsed": "sshleifer/tiny-gpt2",
+      "portsTested": [3200, 3201, 3202, 3205],
+      "results": {
+        "VAL-CLI-007": "PASSED - Server started on port 3200, health check returned 200 with status 'healthy'",
+        "VAL-CLI-008": "PASSED - vLLM backend server started on port 3201, health check returned 200, logs show 'Backend: vllm'",
+        "VAL-CLI-009": "PASSED - llama.cpp backend server started on port 3202, health check returned 200 with backend 'llama-cpp'",
+        "VAL-CLI-010": "PASSED - Custom port 3205 worked correctly, health check responded on port 3205",
+        "VAL-CLI-016": "PASSED - Warning message appeared in logs: 'Warning: Model appears to be unquantized. Performance may be reduced.'"
+      }
+    },
+    "apiTests": {
+      "modelUsed": "microsoft/DialoGPT-medium (cached)",
+      "port": 3200,
+      "results": {
+        "VAL-API-001": "PASSED - GET /v1/models returned 200 with proper JSON structure including object, data array with id/object/created/owned_by fields",
+        "VAL-API-010": "PASSED - GET /health returned 200 with JSON status 'healthy', model, backend, and version fields",
+        "VAL-API-002 through VAL-API-007": "FAILED - Chat completion endpoints return 503 errors due to backend initialization issues (vLLM not installed, llama.cpp needs GGUF conversion)",
+        "VAL-API-012 through VAL-API-014": "FAILED - Error handling tests inconclusive due to 503 backend errors masking other error conditions"
+      }
+    }
+  },
+  "issuesIdentified": [
+    "vLLM backend requires full vLLM installation which is not available in this environment",
+    "llama.cpp backend requires GGUF format models - HuggingFace models need conversion",
+    "Chat completion endpoints exist and return proper JSON error structures but actual inference fails due to backend dependencies"
+  ],
+  "previousRound": null
+}

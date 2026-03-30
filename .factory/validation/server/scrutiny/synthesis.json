@@ -1,26 +1,11 @@
 {
   "milestone": "server",
-  "round": 1,
+  "round": 2,
   "status": "pass",
   "validatorsRun": {
-    "test": {
-      "passed": true,
-      "command": "cd python && pytest tests/test_api_server.py -v",
-      "exitCode": 0,
-      "observation": "36 tests passed for server milestone"
-    },
-    "typecheck": {
-      "passed": true,
-      "command": "cd python && mypy src/llm_compress",
-      "exitCode": 0,
-      "observation": "No type errors found"
-    },
-    "lint": {
-      "passed": true,
-      "command": "cd python && ruff check src/llm_compress tests",
-      "exitCode": 0,
-      "observation": "All lint checks pass"
-    }
+    "test": { "passed": true, "command": "pytest tests/ -v", "exitCode": 0 },
+    "typecheck": { "passed": true, "command": "mypy src/llm_compress", "exitCode": 0 },
+    "lint": { "passed": true, "command": "ruff check src/llm_compress tests", "exitCode": 0 }
   },
   "reviewsSummary": {
     "total": 3,
@@ -29,8 +14,14 @@
     "failedFeatures": []
   },
   "blockingIssues": [],
-  "appliedUpdates": [],
+  "appliedUpdates": [
+    {
+      "target": "services.yaml",
+      "description": "Updated typecheck-python command path from 'llm_compress' to 'src/llm_compress' to match actual source layout",
+      "sourceFeature": "scrutiny-validator-server"
+    }
+  ],
   "suggestedGuidanceUpdates": [],
   "rejectedObservations": [],
-  "previousRound": null
+  "previousRound": ".factory/validation/server/scrutiny/synthesis-round1.json"
 }

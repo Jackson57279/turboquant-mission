@@ -88,13 +88,13 @@ def create_app(
     enable_kv_compression: bool = True,
 ) -> FastAPI:
     """Create FastAPI application.
-    
+
     Args:
         model_id: HuggingFace model identifier
         backend: Inference backend ("vllm" or "llama-cpp")
         cache_dir: Cache directory for model files
         enable_kv_compression: Whether to enable TurboQuant KV cache compression
-        
+
     Returns:
         Configured FastAPI application
     """
@@ -138,7 +138,7 @@ def create_app(
                 raise HTTPException(
                     status_code=503,
                     detail=f"Backend initialization failed: {str(e)}"
-                )
+                ) from e
         return _server_state["backend"]
 
     # ========================================================================
@@ -274,7 +274,7 @@ def create_app(
     @app.post("/v1/chat/completions")
     async def chat_completions(request: ChatCompletionRequest) -> Any:
         """Create a chat completion.
-        
+
         Supports both streaming and non-streaming responses.
         """
         backend = _get_backend()
@@ -336,7 +336,7 @@ def create_app(
                 raise HTTPException(
                     status_code=500,
                     detail=f"Completion failed: {str(e)}"
-                )
+                ) from e
 
     # ========================================================================
     # Legacy Completions Endpoint
@@ -406,7 +406,7 @@ def create_app(
     @app.post("/v1/completions")
     async def completions(request: CompletionRequest) -> Any:
         """Create a text completion (legacy endpoint).
-        
+
         Supports both streaming and non-streaming responses.
         """
         backend = _get_backend()
@@ -465,7 +465,7 @@ def create_app(
                 raise HTTPException(
                     status_code=500,
                     detail=f"Completion failed: {str(e)}"
-                )
+                ) from e
 
     # ========================================================================
     # Error Handlers
