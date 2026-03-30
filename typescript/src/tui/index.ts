@@ -7,6 +7,7 @@
  * - Download screen with progress bar and ETA
  * - Error modal dialogs
  * - Help system
+ * - Server control panel for start/stop operations
  */
 
 import { spawn } from "child_process";
@@ -34,13 +35,26 @@ interface DownloadProgress {
   error?: string;
 }
 
+// Server control state
+interface ServerState {
+  isRunning: boolean;
+  port: number;
+  host: string;
+  backend: "vllm" | "llama-cpp";
+  modelId: string | null;
+  status: "stopped" | "starting" | "running" | "error";
+  error?: string;
+  pid?: number;
+}
+
 // TUI State
 interface TUIState {
   models: ModelInfo[];
   selectedIndex: number;
-  screen: "browser" | "download" | "help" | "error" | "confirm_download" | "quantize" | "confirm_quantize";
+  screen: "browser" | "download" | "help" | "error" | "confirm_download" | "quantize" | "confirm_quantize" | "server_control" | "chat";
   downloadProgress: DownloadProgress;
   quantizeProgress: QuantizeProgress;
+  serverState: ServerState;
   errorMessage: string;
   downloadInput: string;
   isDownloading: boolean;
@@ -135,6 +149,111 @@ function renderProgressBar(percent: number, width: number = 40): string {
   return "█".repeat(filled) + "░".repeat(empty);
 }
 
+// Check if server is running
+async function checkServerStatus(port: number): Promise<boolean> {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/health`, {
+      method: "GET",
+      signal: AbortSignal.timeout(1000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Start server process
+function startServer(
+  modelId: string,
+  port: number,
+  host: string,
+  backend: "vllm" | "llama-cpp",
+  onStatusChange: (state: Partial<ServerState>) => void,
+  onError: (error: string) => void
+): () => void {
+  const args = [
+    "-m", "llm_compress",
+    "serve",
+    modelId,
+    "--port", port.toString(),
+    "--host", host,
+    "--backend", backend,
+  ];
+
+  const proc = spawn("python", args, {
+    cwd: "/home/dih/turboquant-mission/python",
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let stderr = "";
+
+  proc.stdout?.on("data", (data: Buffer) => {
+    const output = data.toString();
+    // Check for server ready message
+    if (output.includes("Starting API server") || output.includes("Server ready")) {
+      onStatusChange({ isRunning: true, status: "running" });
+    }
+  });
+
+  proc.stderr?.on("data", (data: Buffer) => {
+    stderr += data.toString();
+  });
+
+  proc.on("error", (err: Error) => {
+    onError(`Failed to start server: ${err.message}`);
+  });
+
+  proc.on("close", (code: number) => {
+    if (code !== 0 && code !== null) {
+      onStatusChange({ isRunning: false, status: "error", error: stderr || `Server exited with code ${code}` });
+    } else {
+      onStatusChange({ isRunning: false, status: "stopped" });
+    }
+  });
+
+  // Initial status
+  onStatusChange({ isRunning: true, status: "starting", pid: proc.pid });
+
+  // Poll for server readiness
+  const pollInterval = setInterval(async () => {
+    const isRunning = await checkServerStatus(port);
+    if (isRunning) {
+      clearInterval(pollInterval);
+      onStatusChange({ isRunning: true, status: "running" });
+    }
+  }, 500);
+
+  // Timeout after 30 seconds
+  setTimeout(() => {
+    clearInterval(pollInterval);
+  }, 30000);
+
+  // Return stop function
+  return () => {
+    clearInterval(pollInterval);
+    if (proc.pid) {
+      try {
+        process.kill(-proc.pid, "SIGTERM"); // Kill process group
+      } catch {
+        // Process may have already exited
+      }
+    }
+  };
+}
+
+// Stop server process
+function stopServer(serverState: ServerState, onStopped: () => void): void {
+  if (serverState.pid) {
+    try {
+      process.kill(-serverState.pid, "SIGTERM");
+    } catch {
+      // Process may have already exited
+    }
+  }
+  onStopped();
+}
+
 // Draw the model browser screen
 function drawBrowser(state: TUIState): void {
   clearScreen();
@@ -169,6 +288,8 @@ function drawBrowser(state: TUIState): void {
 
     console.log("║                                                          ║");
     console.log("║  Press 'd' to download a new model                     ║");
+    console.log("║  Press 't' to quantize selected model                  ║");
+    console.log("║  Press 's' for server control                          ║");
   }
 
   console.log("║  Press '?' for help                                     ║");
@@ -250,6 +371,95 @@ function drawQuantizeConfig(state: TUIState): void {
   console.log("║  Press 'k' to toggle KV cache                          ║");
   console.log("║  Press Enter to start quantization                    ║");
   console.log("║  Press Esc to cancel                                   ║");
+  console.log("║                                                          ║");
+  console.log("╚══════════════════════════════════════════════════════════╝");
+}
+
+// Draw the server control screen
+function drawServerControl(state: TUIState): void {
+  clearScreen();
+
+  console.log("╔══════════════════════════════════════════════════════════╗");
+  console.log("║           Server Control Panel                           ║");
+  console.log("╠══════════════════════════════════════════════════════════╣");
+  console.log("║                                                          ║");
+
+  const serverState = state.serverState;
+
+  if (serverState.status === "stopped" || serverState.status === "error") {
+    console.log("║  Server Status: Stopped                                 ║");
+    console.log("║                                                          ║");
+    console.log("║  Configuration:                                          ║");
+    console.log("║                                                          ║");
+
+    // Port selection
+    console.log(`║    Port: ${serverState.port.toString().padEnd(49)}║`);
+    console.log("║    Use ↑/↓ to adjust port                               ║");
+    console.log("║                                                          ║");
+
+    // Host selection
+    console.log(`║    Host: ${serverState.host.padEnd(49)}║`);
+    console.log("║    Press 'h' to toggle host (127.0.0.1 / 0.0.0.0)       ║");
+    console.log("║                                                          ║");
+
+    // Backend selection
+    const vllmSelected = serverState.backend === "vllm";
+    const llamaSelected = serverState.backend === "llama-cpp";
+    console.log("║    Backend:                                              ║");
+    console.log(`║      ${vllmSelected ? "▶" : " "} vLLM (high-throughput GPU)                  ║`);
+    console.log(`║      ${llamaSelected ? "▶" : " "} llama.cpp (broad hardware support)           ║`);
+    console.log("║      Press ←/→ to change backend                       ║");
+    console.log("║                                                          ║");
+
+    if (serverState.error) {
+      console.log("║                                                          ║");
+      console.log(`║  Error: ${serverState.error.substring(0, 50).padEnd(49)}║`);
+    }
+
+    console.log("║                                                          ║");
+    console.log("║  Press Enter to START server                            ║");
+    console.log("║  Press Esc to return to browser                         ║");
+  } else if (serverState.status === "starting") {
+    console.log("║  Server Status: Starting...                             ║");
+    console.log("║                                                          ║");
+    console.log(`║  Port: ${serverState.port.toString().padEnd(50)}║`);
+    console.log(`║  Backend: ${serverState.backend.padEnd(47)}║`);
+    console.log("║                                                          ║");
+    console.log("║  Initializing...                                        ║");
+    console.log("║                                                          ║");
+    console.log("║  Press 'q' to cancel                                    ║");
+  } else if (serverState.status === "running") {
+    console.log("║  Server Status: ✓ RUNNING                               ║");
+    console.log("║                                                          ║");
+    console.log(`║  Port: ${serverState.port.toString().padEnd(50)}║`);
+    console.log(`║  Backend: ${serverState.backend.padEnd(47)}║`);
+    console.log("║                                                          ║");
+    console.log(`║  Health: http://127.0.0.1:${serverState.port}/health`.padEnd(58) + "║");
+    console.log(`║  API: http://127.0.0.1:${serverState.port}/v1/chat/completions`.padEnd(58) + "║");
+    console.log("║                                                          ║");
+    console.log("║  Press 'c' to open chat interface                       ║");
+    console.log("║  Press Enter to STOP server                             ║");
+  }
+
+  console.log("║                                                          ║");
+  console.log("╚══════════════════════════════════════════════════════════╝");
+}
+
+// Draw the chat screen (placeholder)
+function drawChat(_state: TUIState): void {
+  clearScreen();
+
+  console.log("╔══════════════════════════════════════════════════════════╗");
+  console.log("╔══════════════════════════════════════════════════════════╗");
+  console.log(
+
+  console.log("╔══════════════════════════════════════════════════════════╗");
+  console.log("║           Chat Interface                                 ║");
+  console.log("╠══════════════════════════════════════════════════════════╣");
+  console.log("║                                                          ║");
+  console.log("║  Chat interface coming soon!                             ║");
+  console.log("║                                                          ║");
+  console.log("║  Press Esc to return to server control                   ║");
   console.log("║                                                          ║");
   console.log("╚══════════════════════════════════════════════════════════╝");
 }
@@ -470,6 +680,7 @@ function drawHelp(): void {
   console.log("║    Enter     Select model                               ║");
   console.log("║    d         Download new model                        ║");
   console.log("║    t         Quantize selected model                   ║");
+  console.log("║    s         Server control panel                      ║");
   console.log("║                                                          ║");
   console.log("║  Download Screen:                                        ║");
   console.log("║    Enter     Start download                             ║");
@@ -482,6 +693,15 @@ function drawHelp(): void {
   console.log("║    Enter     Start quantization                        ║");
   console.log("║    Esc       Cancel / Go back                          ║");
   console.log("║    q         Cancel during quantization                ║");
+  console.log("║                                                          ║");
+  console.log("║  Server Control:                                         ║");
+  console.log("║    ↑ / ↓     Adjust port number                        ║");
+  console.log("║    h         Toggle host (127.0.0.1 / 0.0.0.0)         ║");
+  console.log("║    ← / →     Change backend (vLLM / llama.cpp)        ║");
+  console.log("║    Enter     Start / Stop server                       ║");
+  console.log("║    c         Open chat (when running)                  ║");
+  console.log("║    Esc       Go back to browser                        ║");
+  console.log("║    q         Cancel while starting                     ║");
   console.log("║                                                          ║");
   console.log("║  General:                                                ║");
   console.log("║    ?         Show this help                            ║");
@@ -606,6 +826,14 @@ export function launchTUI(): Promise<void> {
         eta: 0,
         status: "idle",
       },
+      serverState: {
+        isRunning: false,
+        port: 3200,
+        host: "127.0.0.1",
+        backend: "vllm",
+        modelId: null,
+        status: "stopped",
+      },
       errorMessage: "",
       downloadInput: "",
       isDownloading: false,
@@ -618,6 +846,7 @@ export function launchTUI(): Promise<void> {
 
     let cancelDownload: (() => void) | null = null;
     let cancelQuantize: (() => void) | null = null;
+    let cancelServer: (() => void) | null = null;
 
     // Set up stdin for key press
     const stdin = process.stdin;
@@ -633,6 +862,9 @@ export function launchTUI(): Promise<void> {
       if (key === "\u0003") {
         if (cancelDownload) {
           cancelDownload();
+        }
+        if (cancelServer) {
+          cancelServer();
         }
         stdin.setRawMode(false);
         stdin.pause();
@@ -653,6 +885,106 @@ export function launchTUI(): Promise<void> {
         if (key === "q" || key === "\u001b" || key === "?") {
           state.screen = "browser";
           drawBrowser(state);
+        }
+        return;
+      }
+
+      // Handle chat screen
+      if (state.screen === "chat") {
+        if (key === "\u001b" || key === "\u001b\u001b") {
+          state.screen = "server_control";
+          drawServerControl(state);
+        }
+        return;
+      }
+
+      // Handle server control screen
+      if (state.screen === "server_control") {
+        const serverState = state.serverState;
+
+        if (serverState.status === "stopped" || serverState.status === "error") {
+          // Config mode
+          if (key === "\r" || key === "\n") {
+            // Start server with selected model
+            if (state.models.length > 0 && state.selectedIndex < state.models.length) {
+              const model = state.models[state.selectedIndex];
+              state.serverState.modelId = model.id;
+              state.serverState.status = "starting";
+              drawServerControl(state);
+
+              cancelServer = startServer(
+                model.id,
+                state.serverState.port,
+                state.serverState.host,
+                state.serverState.backend,
+                (newState) => {
+                  Object.assign(state.serverState, newState);
+                  if (state.screen === "server_control") {
+                    drawServerControl(state);
+                  }
+                },
+                (error) => {
+                  state.serverState.status = "error";
+                  state.serverState.error = error;
+                  state.serverState.isRunning = false;
+                  if (state.screen === "server_control") {
+                    drawServerControl(state);
+                  }
+                }
+              );
+            }
+          } else if (key === "\u001b" || key === "\u001b\u001b") {
+            // Escape - go back
+            state.screen = "browser";
+            drawBrowser(state);
+          } else if (key === "\u001b[A") { // Up arrow - increase port
+            state.serverState.port = Math.min(65535, state.serverState.port + 1);
+            drawServerControl(state);
+          } else if (key === "\u001b[B") { // Down arrow - decrease port
+            state.serverState.port = Math.max(1024, state.serverState.port - 1);
+            drawServerControl(state);
+          } else if (key === "\u001b[D") { // Left arrow - vllm
+            state.serverState.backend = "vllm";
+            drawServerControl(state);
+          } else if (key === "\u001b[C") { // Right arrow - llama-cpp
+            state.serverState.backend = "llama-cpp";
+            drawServerControl(state);
+          } else if (key === "h" || key === "H") {
+            // Toggle host
+            state.serverState.host = state.serverState.host === "127.0.0.1" ? "0.0.0.0" : "127.0.0.1";
+            drawServerControl(state);
+          }
+        } else if (serverState.status === "starting") {
+          if (key === "q") {
+            // Cancel starting
+            if (cancelServer) {
+              cancelServer();
+            }
+            state.serverState.status = "stopped";
+            state.serverState.isRunning = false;
+            drawServerControl(state);
+          }
+        } else if (serverState.status === "running") {
+          if (key === "\r" || key === "\n") {
+            // Stop server
+            if (cancelServer) {
+              cancelServer();
+            }
+            stopServer(state.serverState, () => {
+              state.serverState.status = "stopped";
+              state.serverState.isRunning = false;
+              state.serverState.pid = undefined;
+              drawServerControl(state);
+            });
+          } else if (key === "c" || key === "C") {
+            // Open chat interface (placeholder for now)
+            state.screen = "chat";
+            drawChat(state);
+          } else if (key === "\u001b" || key === "\u001b\u001b") {
+            // Escape - go back to browser
+            state.screen = "browser";
+            drawBrowser(state);
+          }
         }
         return;
       }
@@ -847,6 +1179,13 @@ export function launchTUI(): Promise<void> {
               state.screen = "quantize";
               drawQuantizeConfig(state);
             }
+            break;
+
+          case "s":
+            // Open server control
+            state.screen = "server_control";
+            state.serverState.status = state.serverState.isRunning ? "running" : "stopped";
+            drawServerControl(state);
             break;
 
           case "?":
