@@ -1,608 +1,564 @@
 /**
- * TUI (Terminal User Interface) module.
+ * TUI Module - Terminal User Interface for LLM Compress
  *
- * This module provides OpenTUI-based components for the
- * interactive terminal interface.
- *
- * @module tui
+ * This module provides an interactive terminal interface using OpenTUI concepts.
+ * It includes:
+ * - Model browser with keyboard navigation
+ * - Download screen with progress bar and ETA
+ * - Error modal dialogs
+ * - Help system
  */
 
-import { createCliRenderer, TextRenderable, BoxRenderable } from "@opentui/core";
-import type { KeyEvent } from "@opentui/core";
+import * as readline from "readline";
+import { spawn } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 
-/**
- * Model metadata interface.
- */
-export interface ModelInfo {
+// Model metadata interface
+interface ModelInfo {
   id: string;
-  name: string;
   size: string;
-  files: number;
   quantized: boolean;
-  downloaded: string;
+  downloadedAt?: string;
 }
 
-/**
- * TUI application state.
- */
-export interface TUIState {
-  /** Current screen */
-  screen: 'main' | 'models' | 'model_detail' | 'help' | 'quit_confirm';
-  /** Selected model index */
+// Download progress state
+interface DownloadProgress {
+  modelId: string;
+  percent: number;
+  downloadedBytes: number;
+  totalBytes: number;
+  speed: number; // bytes per second
+  eta: number; // seconds
+  status: "downloading" | "complete" | "error" | "idle";
+  error?: string;
+}
+
+// TUI State
+interface TUIState {
+  models: ModelInfo[];
   selectedIndex: number;
-  /** Selected model */
-  selectedModel: ModelInfo | null;
-  /** Server status */
-  serverRunning: boolean;
-  /** Whether TUI should exit */
-  shouldExit: boolean;
-  /** Last key pressed */
-  lastKey: string;
+  screen: "browser" | "download" | "help" | "error" | "confirm_download";
+  downloadProgress: DownloadProgress;
+  errorMessage: string;
+  downloadInput: string;
+  isDownloading: boolean;
 }
 
-/**
- * Create initial TUI state.
- *
- * @returns Initial state
- */
-export function createInitialState(): TUIState {
-  return {
-    screen: 'main',
-    selectedIndex: 0,
-    selectedModel: null,
-    serverRunning: false,
-    shouldExit: false,
-    lastKey: '',
+// Default cache directory
+function getCacheDir(): string {
+  return path.join(os.homedir(), ".cache", "llm-compress");
+}
+
+// Load models from cache directory
+function loadCachedModels(): ModelInfo[] {
+  const cacheDir = getCacheDir();
+  const models: ModelInfo[] = [];
+
+  if (!fs.existsSync(cacheDir)) {
+    return models;
+  }
+
+  try {
+    const entries = fs.readdirSync(cacheDir);
+    for (const entry of entries) {
+      const metadataPath = path.join(cacheDir, entry, "metadata.json");
+      if (fs.existsSync(metadataPath)) {
+        try {
+          const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+          models.push({
+            id: metadata.id || entry,
+            size: metadata.size || "Unknown",
+            quantized: metadata.quantized || false,
+            downloadedAt: metadata.downloadedAt,
+          });
+        } catch {
+          // Invalid metadata, skip
+        }
+      }
+    }
+  } catch {
+    // Error reading cache, return empty
+  }
+
+  return models;
+}
+
+// Clear screen
+function clearScreen(): void {
+  process.stdout.write("\x1b[2J\x1b[H");
+}
+
+// Format bytes to human readable
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
+// Format ETA
+function formatETA(seconds: number): string {
+  if (seconds < 0 || !isFinite(seconds)) return "calculating...";
+  if (seconds < 60) return `${Math.ceil(seconds)}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.ceil(seconds % 60);
+  return `${mins}m ${secs}s`;
+}
+
+// Render progress bar
+function renderProgressBar(percent: number, width: number = 40): string {
+  const filled = Math.floor((percent / 100) * width);
+  const empty = width - filled;
+  return "█".repeat(filled) + "░".repeat(empty);
+}
+
+// Draw the model browser screen
+function drawBrowser(state: TUIState): void {
+  clearScreen();
+
+  console.log("╔══════════════════════════════════════════════════════════╗");
+  console.log("║           LLM Compress - Model Browser                   ║");
+  console.log("╠══════════════════════════════════════════════════════════╣");
+
+  if (state.models.length === 0) {
+    console.log("║                                                          ║");
+    console.log("║  No models in cache                                      ║");
+    console.log("║                                                          ║");
+    console.log("║  Press 'd' to download a model                          ║");
+  } else {
+    console.log("║  Use ↑/↓ to navigate, Enter to select                    ║");
+    console.log("║                                                          ║");
+
+    // Show models (limit to 10 for screen space)
+    const displayModels = state.models.slice(0, 10);
+    displayModels.forEach((model, index) => {
+      const isSelected = index === state.selectedIndex;
+      const prefix = isSelected ? "▶ " : "  ";
+      const quantized = model.quantized ? " [Q]" : "";
+      const line = `${prefix}${model.id} (${model.size})${quantized}`.substring(0, 52);
+      console.log(`║${isSelected ? "\x1b[7m" : ""}${line.padEnd(58)}\x1b[0m║`);
+    });
+
+    // Show scroll indicator if more models
+    if (state.models.length > 10) {
+      console.log(`║  ... and ${state.models.length - 10} more models`.padEnd(58) + "║");
+    }
+
+    console.log("║                                                          ║");
+    console.log("║  Press 'd' to download a new model                     ║");
+  }
+
+  console.log("║  Press '?' for help                                     ║");
+  console.log("║  Press 'q' to quit                                      ║");
+  console.log("║                                                          ║");
+  console.log("╚══════════════════════════════════════════════════════════╝");
+}
+
+// Draw the download screen with progress
+function drawDownload(state: TUIState): void {
+  clearScreen();
+
+  console.log("╔══════════════════════════════════════════════════════════╗");
+  console.log("║           Download Model                                 ║");
+  console.log("╠══════════════════════════════════════════════════════════╣");
+  console.log("║                                                          ║");
+
+  if (state.downloadProgress.status === "idle") {
+    console.log("║  Enter model ID (e.g., microsoft/DialoGPT-medium):       ║");
+    console.log("║                                                          ║");
+    console.log(`║  > ${state.downloadInput.padEnd(53)}║`);
+    console.log("║                                                          ║");
+    console.log("║  Press Enter to start download                          ║");
+    console.log("║  Press Esc to cancel                                    ║");
+  } else if (state.downloadProgress.status === "downloading") {
+    const progress = state.downloadProgress;
+    const percent = progress.percent.toFixed(1);
+    const bar = renderProgressBar(progress.percent);
+
+    console.log(`║  Model: ${progress.modelId.padEnd(48)}║`);
+    console.log("║                                                          ║");
+    console.log(`║  ${bar} ${percent.padStart(6)}% ║`);
+    console.log("║                                                          ║");
+    console.log(`║  Downloaded: ${formatBytes(progress.downloadedBytes).padEnd(15)} Total: ${formatBytes(progress.totalBytes).padEnd(15)}║`);
+    console.log(`║  Speed: ${(formatBytes(progress.speed) + "/s").padEnd(20)} ETA: ${formatETA(progress.eta).padEnd(18)}║`);
+    console.log("║                                                          ║");
+    console.log("║  Press 'q' to cancel download                           ║");
+  } else if (state.downloadProgress.status === "complete") {
+    console.log("║  ✓ Download Complete!                                   ║");
+    console.log("║                                                          ║");
+    console.log(`║  Model: ${state.downloadProgress.modelId.padEnd(48)}║`);
+    console.log("║                                                          ║");
+    console.log("║  Press any key to return to browser                     ║");
+  }
+
+  console.log("║                                                          ║");
+  console.log("╚══════════════════════════════════════════════════════════╝");
+}
+
+// Draw the error modal
+function drawErrorModal(state: TUIState): void {
+  // First draw the background screen
+  if (state.screen === "browser") {
+    drawBrowser(state);
+  } else {
+    drawDownload(state);
+  }
+
+  // Draw modal overlay
+  const lines = state.errorMessage.split("\n");
+  const maxWidth = Math.max(...lines.map(l => l.length), 20);
+  const modalWidth = Math.min(maxWidth + 4, 50);
+  const modalHeight = lines.length + 4;
+
+  // Center the modal
+  const startRow = 5;
+  const startCol = Math.floor((60 - modalWidth) / 2);
+
+  // Move cursor and draw modal box
+  process.stdout.write(`\x1b[${startRow};${startCol}H`);
+  console.log("╔" + "═".repeat(modalWidth - 2) + "╗");
+
+  for (let i = 0; i < modalHeight - 2; i++) {
+    process.stdout.write(`\x1b[${startRow + i + 1};${startCol}H`);
+    if (i === 0) {
+      console.log("║" + " ERROR ".padStart(Math.floor((modalWidth - 2) / 2)).padEnd(modalWidth - 2) + "║");
+    } else if (i <= lines.length) {
+      const line = lines[i - 1] || "";
+      console.log("║ " + line.substring(0, modalWidth - 4).padEnd(modalWidth - 4) + " ║");
+    } else {
+      console.log("║" + " ".repeat(modalWidth - 2) + "║");
+    }
+  }
+
+  process.stdout.write(`\x1b[${startRow + modalHeight - 1};${startCol}H`);
+  console.log("╠" + "═".repeat(modalWidth - 2) + "╣");
+  process.stdout.write(`\x1b[${startRow + modalHeight};${startCol}H`);
+  console.log("║" + " Press any key to dismiss ".padStart(Math.floor((modalWidth - 2 + 26) / 2)).padEnd(modalWidth - 2) + "║");
+  process.stdout.write(`\x1b[${startRow + modalHeight + 1};${startCol}H`);
+  console.log("╚" + "═".repeat(modalWidth - 2) + "╝");
+}
+
+// Draw the help screen
+function drawHelp(): void {
+  clearScreen();
+
+  console.log("╔══════════════════════════════════════════════════════════╗");
+  console.log("║           Keyboard Shortcuts                             ║");
+  console.log("╠══════════════════════════════════════════════════════════╣");
+  console.log("║                                                          ║");
+  console.log("║  Model Browser:                                          ║");
+  console.log("║    ↑ / ↓     Navigate model list                        ║");
+  console.log("║    Enter     Select model                               ║");
+  console.log("║    d         Download new model                        ║");
+  console.log("║                                                          ║");
+  console.log("║  Download Screen:                                        ║");
+  console.log("║    Enter     Start download                             ║");
+  console.log("║    Esc       Cancel / Go back                          ║");
+  console.log("║    q         Quit during download                      ║");
+  console.log("║                                                          ║");
+  console.log("║  General:                                                ║");
+  console.log("║    ?         Show this help                            ║");
+  console.log("║    q         Quit (with confirmation if active)        ║");
+  console.log("║    Ctrl+C    Force quit                                 ║");
+  console.log("║                                                          ║");
+  console.log("╚══════════════════════════════════════════════════════════╝");
+}
+
+// Parse download progress from Python CLI output
+function parseProgress(line: string): Partial<DownloadProgress> | null {
+  // Try to match patterns like:
+  // "Downloading: 45.2% (12.3MB / 27.2MB) [23.4KB/s] ETA: 1m 23s"
+  // "Downloaded 12.3MB of 27.2MB at 23.4KB/s"
+
+  const percentMatch = line.match(/(\d+\.?\d*)%/);
+  const sizeMatch = line.match(/(\d+\.?\d*)\s*(B|KB|MB|GB|TB).*?(\d+\.?\d*)\s*(B|KB|MB|GB|TB)/i);
+  const speedMatch = line.match(/(\d+\.?\d*)\s*(B|KB|MB|GB|TB)/i);
+  const etaMatch = line.match(/ETA:\s*(.+)/i);
+
+  const progress: Partial<DownloadProgress> = {};
+
+  if (percentMatch) {
+    progress.percent = parseFloat(percentMatch[1]);
+  }
+
+  return progress;
+}
+
+// Start a model download
+function startDownload(
+  modelId: string,
+  onProgress: (progress: DownloadProgress) => void,
+  onComplete: () => void,
+  onError: (error: string) => void
+): () => void {
+  let totalBytes = 0;
+  let startTime = Date.now();
+
+  const progress: DownloadProgress = {
+    modelId,
+    percent: 0,
+    downloadedBytes: 0,
+    totalBytes: 0,
+    speed: 0,
+    eta: 0,
+    status: "downloading",
+  };
+
+  // Spawn Python CLI download command
+  const proc = spawn(
+    "python",
+    ["-m", "llm_compress", "download", modelId, "--cache-dir", getCacheDir()],
+    { cwd: "/home/dih/turboquant-mission/python" }
+  );
+
+  let stderr = "";
+
+  proc.stdout.on("data", (data: Buffer) => {
+    const lines = data.toString().split("\n");
+    for (const line of lines) {
+      // Parse progress from output
+      const parsed = parseProgress(line);
+      if (parsed) {
+        Object.assign(progress, parsed);
+      }
+
+      // Update speed and ETA calculation
+      const now = Date.now();
+      const elapsed = (now - startTime) / 1000;
+      if (elapsed > 0 && progress.downloadedBytes > 0) {
+        progress.speed = progress.downloadedBytes / elapsed;
+        if (progress.totalBytes > 0 && progress.speed > 0) {
+          const remaining = progress.totalBytes - progress.downloadedBytes;
+          progress.eta = remaining / progress.speed;
+        }
+      }
+
+      onProgress({ ...progress });
+    }
+  });
+
+  proc.stderr.on("data", (data: Buffer) => {
+    stderr += data.toString();
+  });
+
+  proc.on("close", (code: number) => {
+    if (code === 0) {
+      progress.status = "complete";
+      progress.percent = 100;
+      onProgress({ ...progress });
+      onComplete();
+    } else {
+      progress.status = "error";
+      onError(stderr || `Download failed with exit code ${code}`);
+    }
+  });
+
+  // Return cancel function
+  return () => {
+    proc.kill("SIGTERM");
   };
 }
 
-/**
- * Sample models for demo purposes.
- */
-const SAMPLE_MODELS: ModelInfo[] = [
-  {
-    id: 'meta-llama/Llama-2-7b-hf',
-    name: 'Llama 2 7B',
-    size: '13.5 GB',
-    files: 3,
-    quantized: false,
-    downloaded: '2024-01-15',
-  },
-  {
-    id: 'meta-llama/Llama-2-7b-chat-hf',
-    name: 'Llama 2 7B Chat',
-    size: '3.8 GB',
-    files: 2,
-    quantized: true,
-    downloaded: '2024-01-20',
-  },
-  {
-    id: 'microsoft/Phi-3-mini-4k-instruct',
-    name: 'Phi-3 Mini',
-    size: '7.6 GB',
-    files: 4,
-    quantized: false,
-    downloaded: '2024-02-01',
-  },
-];
+// Main TUI launch function
+export function launchTUI(): Promise<void> {
+  return new Promise((resolve) => {
+    const state: TUIState = {
+      models: loadCachedModels(),
+      selectedIndex: 0,
+      screen: "browser",
+      downloadProgress: {
+        modelId: "",
+        percent: 0,
+        downloadedBytes: 0,
+        totalBytes: 0,
+        speed: 0,
+        eta: 0,
+        status: "idle",
+      },
+      errorMessage: "",
+      downloadInput: "",
+      isDownloading: false,
+    };
 
-/**
- * Launch the TUI.
- *
- * Creates and runs the OpenTUI-based terminal interface.
- */
-export async function launchTUI(): Promise<void> {
-  const renderer = await createCliRenderer();
-  const state = createInitialState();
+    let cancelDownload: (() => void) | null = null;
 
-  // Create main container box
-  const mainBox = new BoxRenderable(renderer, {
-    id: 'main-box',
-    border: true,
-    borderStyle: 'single',
-    title: ' LLM Compress ',
-    shouldFill: true,
-    backgroundColor: '#1a1a2e',
-    borderColor: '#4a4a6a',
-    focusedBorderColor: '#6a6a8a',
-  });
+    // Set up stdin for key press
+    const stdin = process.stdin;
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding("utf8");
 
-  renderer.root.add(mainBox);
+    // Initial draw
+    drawBrowser(state);
 
-  // Create navigation state
-  let currentScreen: TUIState['screen'] = 'main';
-  let selectedIndex = 0;
-  let selectedModel: ModelInfo | null = null;
-  let shouldExit = false;
-
-  // Create menu items
-  const menuItems = [
-    { label: 'Browse Models', action: 'models', shortcut: 'b' },
-    { label: 'Quantize Model', action: 'quantize', shortcut: 'q' },
-    { label: 'Serve Model', action: 'serve', shortcut: 's' },
-    { label: 'Settings', action: 'settings', shortcut: 't' },
-    { label: 'Quit', action: 'quit', shortcut: 'q' },
-  ];
-
-  // Clear and render helper
-  function clearMainBox(): void {
-    const children = mainBox.getChildren();
-    for (const child of children) {
-      mainBox.remove(child.id);
-    }
-  }
-
-  // Render main menu screen
-  function renderMainMenu(): void {
-    clearMainBox();
-    
-    // Title
-    const title = new TextRenderable(renderer, {
-      id: 'menu-title',
-      content: 'Main Menu',
-    });
-    title.fg = '#ffffff';
-    title.attributes = 1; // bold
-    title.paddingTop = 1;
-    title.paddingLeft = 2;
-    mainBox.add(title);
-
-    // Menu items
-    menuItems.forEach((item, index) => {
-      const isSelected = index === selectedIndex;
-      const prefix = isSelected ? '> ' : '  ';
-      const suffix = isSelected ? ' <' : '';
-      
-      const menuItem = new TextRenderable(renderer, {
-        id: `menu-item-${index}`,
-        content: `${prefix}${item.label} (${item.shortcut})${suffix}`,
-      });
-      menuItem.fg = isSelected ? '#00ff88' : '#a0a0a0';
-      menuItem.attributes = isSelected ? 1 : 0;
-      menuItem.paddingLeft = 4;
-      menuItem.paddingTop = index === 0 ? 2 : 0;
-      mainBox.add(menuItem);
-    });
-
-    // Footer with hints
-    const footer = new TextRenderable(renderer, {
-      id: 'menu-footer',
-      content: '↑↓ Navigate | Enter Select | ? Help | q Quit',
-    });
-    footer.fg = '#606060';
-    footer.paddingLeft = 2;
-    footer.paddingTop = menuItems.length + 2;
-    mainBox.add(footer);
-  }
-
-  // Render model browser screen
-  function renderModelBrowser(): void {
-    clearMainBox();
-    
-    // Title
-    const title = new TextRenderable(renderer, {
-      id: 'browser-title',
-      content: 'Model Browser',
-    });
-    title.fg = '#ffffff';
-    title.attributes = 1;
-    title.paddingTop = 1;
-    title.paddingLeft = 2;
-    mainBox.add(title);
-
-    // Model count
-    const count = new TextRenderable(renderer, {
-      id: 'model-count',
-      content: `${SAMPLE_MODELS.length} models in cache`,
-    });
-    count.fg = '#808080';
-    count.paddingLeft = 2;
-    count.paddingTop = 1;
-    mainBox.add(count);
-
-    // Model list header
-    const header = new TextRenderable(renderer, {
-      id: 'list-header',
-      content: 'NAME                    SIZE      QUANTIZED  DOWNLOADED',
-    });
-    header.fg = '#606060';
-    header.paddingLeft = 2;
-    header.paddingTop = 1;
-    mainBox.add(header);
-
-    // Model items
-    SAMPLE_MODELS.forEach((model, index) => {
-      const isSelected = index === selectedIndex;
-      const prefix = isSelected ? '> ' : '  ';
-      const suffix = isSelected ? ' <' : '';
-      const quantizedStr = model.quantized ? 'Yes' : 'No';
-      
-      // Pad model name to 22 chars
-      const paddedName = model.name.padEnd(22);
-      
-      const modelItem = new TextRenderable(renderer, {
-        id: `model-${index}`,
-        content: `${prefix}${paddedName}${model.size.padEnd(10)}${quantizedStr.padEnd(11)}${model.downloaded}${suffix}`,
-      });
-      modelItem.fg = isSelected ? '#00ff88' : '#a0a0a0';
-      modelItem.attributes = isSelected ? 1 : 0;
-      modelItem.paddingLeft = 2;
-      modelItem.paddingTop = 0;
-      mainBox.add(modelItem);
-    });
-
-    // Footer
-    const footer = new TextRenderable(renderer, {
-      id: 'browser-footer',
-      content: '↑↓ Navigate | Enter Select | m Menu | ? Help | q Quit',
-    });
-    footer.fg = '#606060';
-    footer.paddingLeft = 2;
-    footer.paddingTop = SAMPLE_MODELS.length + 2;
-    mainBox.add(footer);
-  }
-
-  // Render model detail screen
-  function renderModelDetail(): void {
-    clearMainBox();
-    
-    if (!selectedModel) {
-      const error = new TextRenderable(renderer, {
-        id: 'error',
-        content: 'No model selected',
-      });
-      error.fg = '#ff4444';
-      mainBox.add(error);
-      return;
-    }
-
-    // Title
-    const title = new TextRenderable(renderer, {
-      id: 'detail-title',
-      content: 'Model Details',
-    });
-    title.fg = '#ffffff';
-    title.attributes = 1;
-    title.paddingTop = 1;
-    title.paddingLeft = 2;
-    mainBox.add(title);
-
-    // Model info
-    const details = [
-      { label: 'ID:', value: selectedModel.id },
-      { label: 'Name:', value: selectedModel.name },
-      { label: 'Size:', value: selectedModel.size },
-      { label: 'Files:', value: String(selectedModel.files) },
-      { label: 'Quantized:', value: selectedModel.quantized ? 'Yes' : 'No' },
-      { label: 'Downloaded:', value: selectedModel.downloaded },
-    ];
-
-    let currentY = 2;
-    details.forEach((detail, index) => {
-      const labelText = new TextRenderable(renderer, {
-        id: `detail-label-${index}`,
-        content: detail.label,
-      });
-      labelText.fg = '#808080';
-      labelText.attributes = 1;
-      labelText.paddingLeft = 4;
-      labelText.paddingTop = currentY;
-      currentY = 0; // Only first has padding
-      mainBox.add(labelText);
-
-      const valueText = new TextRenderable(renderer, {
-        id: `detail-value-${index}`,
-        content: '  ' + detail.value,
-      });
-      valueText.fg = '#ffffff';
-      valueText.paddingLeft = 4;
-      mainBox.add(valueText);
-    });
-
-    // Actions
-    const actionsText = new TextRenderable(renderer, {
-      id: 'detail-actions',
-      content: '\nActions:',
-    });
-    actionsText.fg = '#808080';
-    actionsText.attributes = 1;
-    actionsText.paddingLeft = 4;
-    mainBox.add(actionsText);
-
-    const actions = [
-      'q - Quantize this model',
-      's - Serve this model',
-      'd - Delete from cache',
-    ];
-
-    actions.forEach((action, index) => {
-      const actionText = new TextRenderable(renderer, {
-        id: `action-${index}`,
-        content: '  ' + action,
-      });
-      actionText.fg = '#a0a0a0';
-      actionText.paddingLeft = 4;
-      mainBox.add(actionText);
-    });
-
-    // Footer
-    const footer = new TextRenderable(renderer, {
-      id: 'detail-footer',
-      content: 'Esc Back | ? Help',
-    });
-    footer.fg = '#606060';
-    footer.paddingLeft = 2;
-    footer.paddingTop = 4;
-    mainBox.add(footer);
-  }
-
-  // Render help screen
-  function renderHelp(): void {
-    clearMainBox();
-    
-    const title = new TextRenderable(renderer, {
-      id: 'help-title',
-      content: 'Keyboard Shortcuts',
-    });
-    title.fg = '#ffffff';
-    title.attributes = 1;
-    title.paddingTop = 1;
-    title.paddingLeft = 2;
-    mainBox.add(title);
-
-    const shortcuts = [
-      { key: '↑ / ↓', description: 'Navigate up/down in lists' },
-      { key: 'Enter', description: 'Select/confirm' },
-      { key: 'm', description: 'Go to main menu' },
-      { key: 'b', description: 'Browse models' },
-      { key: '?', description: 'Show this help' },
-      { key: 'q', description: 'Quit application' },
-      { key: 'Esc', description: 'Go back' },
-    ];
-
-    let currentY = 2;
-    shortcuts.forEach((shortcut, index) => {
-      const keyText = new TextRenderable(renderer, {
-        id: `help-key-${index}`,
-        content: shortcut.key.padEnd(12),
-      });
-      keyText.fg = '#00ff88';
-      keyText.attributes = 1;
-      keyText.paddingLeft = 4;
-      keyText.paddingTop = currentY;
-      currentY = 0;
-      mainBox.add(keyText);
-
-      const descText = new TextRenderable(renderer, {
-        id: `help-desc-${index}`,
-        content: shortcut.description,
-      });
-      descText.fg = '#a0a0a0';
-      descText.paddingLeft = 16;
-      mainBox.add(descText);
-    });
-
-    const footer = new TextRenderable(renderer, {
-      id: 'help-footer',
-      content: '\nPress any key to close help',
-    });
-    footer.fg = '#606060';
-    footer.paddingLeft = 2;
-    mainBox.add(footer);
-  }
-
-  // Render quit confirmation
-  function renderQuitConfirm(): void {
-    clearMainBox();
-    
-    const title = new TextRenderable(renderer, {
-      id: 'quit-title',
-      content: 'Quit?',
-    });
-    title.fg = '#ffffff';
-    title.attributes = 1;
-    title.paddingTop = 1;
-    title.paddingLeft = 2;
-    mainBox.add(title);
-
-    const message = new TextRenderable(renderer, {
-      id: 'quit-message',
-      content: 'Are you sure you want to quit?',
-    });
-    message.fg = '#a0a0a0';
-    message.paddingLeft = 4;
-    message.paddingTop = 2;
-    mainBox.add(message);
-
-    const options = new TextRenderable(renderer, {
-      id: 'quit-options',
-      content: '[Y]es  [N]o',
-    });
-    options.fg = '#00ff88';
-    options.paddingLeft = 4;
-    options.paddingTop = 2;
-    mainBox.add(options);
-  }
-
-  // Render current screen
-  function render(): void {
-    switch (currentScreen) {
-      case 'main':
-        renderMainMenu();
-        break;
-      case 'models':
-        renderModelBrowser();
-        break;
-      case 'model_detail':
-        renderModelDetail();
-        break;
-      case 'help':
-        renderHelp();
-        break;
-      case 'quit_confirm':
-        renderQuitConfirm();
-        break;
-    }
-    renderer.requestRender();
-  }
-
-  // Handle key presses using keyHandler
-  function handleKey(key: string, name: string): boolean {
-    // Track last key for debugging
-    state.lastKey = name || key;
-
-    // Help screen - any key closes
-    if (currentScreen === 'help') {
-      // Go back to previous screen
-      if (selectedModel) {
-        currentScreen = 'models';
-      } else {
-        currentScreen = 'main';
-      }
-      render();
-      return true;
-    }
-
-    // Quit confirmation
-    if (currentScreen === 'quit_confirm') {
-      if (key === 'y' || key === 'Y' || name === 'return') {
-        shouldExit = true;
-        return true;
-      }
-      if (key === 'n' || key === 'N' || name === 'escape') {
-        currentScreen = 'main';
-        selectedIndex = 0;
-        render();
-        return true;
-      }
-      return true;
-    }
-
-    // Global shortcuts (not in quit confirm)
-    if (key === '?') {
-      currentScreen = 'help';
-      render();
-      return true;
-    }
-
-    if (key === 'q') {
-      currentScreen = 'quit_confirm';
-      render();
-      return true;
-    }
-
-    if (key === 'm' || name === 'escape') {
-      if (currentScreen === 'model_detail') {
-        currentScreen = 'models';
-      } else if (currentScreen === 'models') {
-        currentScreen = 'main';
-        selectedIndex = 0;
-      } else {
-        currentScreen = 'main';
-        selectedIndex = 0;
-      }
-      render();
-      return true;
-    }
-
-    if (key === 'b') {
-      currentScreen = 'models';
-      selectedIndex = 0;
-      render();
-      return true;
-    }
-
-    // Main menu navigation
-    if (currentScreen === 'main') {
-      if (name === 'up') {
-        selectedIndex = Math.max(0, selectedIndex - 1);
-        render();
-        return true;
-      }
-      if (name === 'down') {
-        selectedIndex = Math.min(menuItems.length - 1, selectedIndex + 1);
-        render();
-        return true;
-      }
-      if (name === 'return') {
-        const selected = menuItems[selectedIndex];
-        if (selected.action === 'models') {
-          currentScreen = 'models';
-          selectedIndex = 0;
-          render();
-          return true;
+    const handleInput = (key: string) => {
+      // Ctrl+C always exits
+      if (key === "\u0003") {
+        if (cancelDownload) {
+          cancelDownload();
         }
-        if (selected.action === 'quit') {
-          currentScreen = 'quit_confirm';
-          render();
-          return true;
-        }
-        // Other actions show placeholder
-        const actionText = new TextRenderable(renderer, {
-          id: 'action-message',
-          content: `Selected: ${selected.label}`,
-        });
-        actionText.fg = '#00ff88';
-        actionText.paddingLeft = 4;
-        actionText.paddingTop = menuItems.length + 3;
-        mainBox.add(actionText);
-        renderer.requestRender();
-        return true;
-      }
-    }
-
-    // Model browser navigation
-    if (currentScreen === 'models') {
-      if (name === 'up') {
-        selectedIndex = Math.max(0, selectedIndex - 1);
-        render();
-        return true;
-      }
-      if (name === 'down') {
-        selectedIndex = Math.min(SAMPLE_MODELS.length - 1, selectedIndex + 1);
-        render();
-        return true;
-      }
-      if (name === 'return') {
-        selectedModel = SAMPLE_MODELS[selectedIndex];
-        currentScreen = 'model_detail';
-        render();
-        return true;
-      }
-    }
-
-    // Model detail screen
-    if (currentScreen === 'model_detail') {
-      if (name === 'escape') {
-        currentScreen = 'models';
-        render();
-        return true;
-      }
-    }
-
-    return true;
-  }
-
-  // Set up keyboard handling using keyHandler
-  renderer.keyInput.on('keypress', (key: KeyEvent) => {
-    const keyChar = key.raw || key.name || '';
-    handleKey(keyChar, key.name || '');
-  });
-
-  // Start renderer and initial render
-  renderer.start();
-  render();
-
-  // Keep process alive until exit
-  await new Promise<void>((resolve) => {
-    const checkInterval = setInterval(() => {
-      if (shouldExit) {
-        clearInterval(checkInterval);
-        renderer.stop();
+        stdin.setRawMode(false);
+        stdin.pause();
         resolve();
+        return;
       }
-    }, 100);
+
+      // Handle error modal first
+      if (state.screen === "error") {
+        state.screen = state.models.length > 0 ? "browser" : "browser";
+        state.errorMessage = "";
+        drawBrowser(state);
+        return;
+      }
+
+      // Handle help screen
+      if (state.screen === "help") {
+        if (key === "q" || key === "\u001b" || key === "?") {
+          state.screen = "browser";
+          drawBrowser(state);
+        }
+        return;
+      }
+
+      // Handle download complete screen
+      if (state.screen === "download" && state.downloadProgress.status === "complete") {
+        state.models = loadCachedModels();
+        state.screen = "browser";
+        state.downloadProgress = {
+          modelId: "",
+          percent: 0,
+          downloadedBytes: 0,
+          totalBytes: 0,
+          speed: 0,
+          eta: 0,
+          status: "idle",
+        };
+        state.downloadInput = "";
+        state.isDownloading = false;
+        cancelDownload = null;
+        drawBrowser(state);
+        return;
+      }
+
+      // Handle download screen
+      if (state.screen === "download") {
+        if (state.downloadProgress.status === "idle") {
+          if (key === "\r" || key === "\n") {
+            // Start download
+            if (state.downloadInput.trim()) {
+              state.isDownloading = true;
+              state.downloadProgress.modelId = state.downloadInput.trim();
+              state.downloadProgress.status = "downloading";
+              drawDownload(state);
+
+              cancelDownload = startDownload(
+                state.downloadInput.trim(),
+                (progress) => {
+                  state.downloadProgress = progress;
+                  if (state.screen === "download") {
+                    drawDownload(state);
+                  }
+                },
+                () => {
+                  state.isDownloading = false;
+                  drawDownload(state);
+                },
+                (error) => {
+                  state.isDownloading = false;
+                  state.errorMessage = error;
+                  state.screen = "error";
+                  drawErrorModal(state);
+                }
+              );
+            }
+          } else if (key === "\u001b" || key === "\u001b\u001b") {
+            // Escape - go back
+            state.screen = "browser";
+            state.downloadInput = "";
+            drawBrowser(state);
+          } else if (key === "\u007f") {
+            // Backspace
+            state.downloadInput = state.downloadInput.slice(0, -1);
+            drawDownload(state);
+          } else if (key >= " " && key <= "~") {
+            // Printable characters
+            if (state.downloadInput.length < 50) {
+              state.downloadInput += key;
+              drawDownload(state);
+            }
+          }
+        } else if (state.downloadProgress.status === "downloading") {
+          if (key === "q") {
+            // Cancel download
+            if (cancelDownload) {
+              cancelDownload();
+            }
+            state.isDownloading = false;
+            state.downloadProgress.status = "idle";
+            state.screen = "browser";
+            drawBrowser(state);
+          }
+        }
+        return;
+      }
+
+      // Handle browser screen
+      if (state.screen === "browser") {
+        switch (key) {
+          case "q":
+            if (state.isDownloading) {
+              state.errorMessage = "Download in progress. Press 'q' again to force quit.";
+              state.screen = "error";
+              drawErrorModal(state);
+            } else {
+              stdin.setRawMode(false);
+              stdin.pause();
+              resolve();
+            }
+            break;
+
+          case "d":
+            state.screen = "download";
+            drawDownload(state);
+            break;
+
+          case "?":
+            state.screen = "help";
+            drawHelp();
+            break;
+
+          case "\u001b[A": // Up arrow
+            if (state.models.length > 0) {
+              state.selectedIndex = Math.max(0, state.selectedIndex - 1);
+              drawBrowser(state);
+            }
+            break;
+
+          case "\u001b[B": // Down arrow
+            if (state.models.length > 0) {
+              state.selectedIndex = Math.min(state.models.length - 1, state.selectedIndex + 1);
+              drawBrowser(state);
+            }
+            break;
+
+          case "\r":
+          case "\n":
+            // Select model - could navigate to model details
+            // For now, just show a simple message
+            if (state.models.length > 0 && state.selectedIndex < state.models.length) {
+              const model = state.models[state.selectedIndex];
+              state.errorMessage = `Selected model: ${model.id}\nSize: ${model.size}\nQuantized: ${model.quantized ? "Yes" : "No"}`;
+              state.screen = "error"; // Using error modal as info dialog
+              drawErrorModal(state);
+            }
+            break;
+        }
+      }
+    };
+
+    stdin.on("data", handleInput);
   });
 }
-
-export default launchTUI;
