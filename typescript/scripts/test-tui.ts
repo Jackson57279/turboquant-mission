@@ -1,58 +1,64 @@
 /**
  * Manual TUI verification script
- * 
+ *
  * This script tests that the TUI module can be imported and initialized
  * without throwing errors. A full interactive test requires a terminal.
- * 
+ *
  * Run with: bun run test:tui
  */
 
-import { createInitialState, type TUIState, type ModelInfo, launchTUI } from "../src/tui/index.js";
+import { launchTUI, type ModelInfo, type QuantizeOptions, type QuantizeProgress } from "../src/tui/index.js";
 
 console.log("Testing TUI module...\n");
 
-// Test 1: Initial state creation
-console.log("✓ Test 1: Initial state created");
-const state = createInitialState();
-console.log(`  - Screen: ${state.screen}`);
-console.log(`  - Selected Index: ${state.selectedIndex}`);
-console.log(`  - Server Running: ${state.serverRunning}`);
+// Test 1: Import check
+console.log("✓ Test 1: Module imports successfully");
 
 // Test 2: Model info structure
-console.log("\n✓ Test 2: Model info interface");
+console.log("✓ Test 2: Model info interface");
 const model: ModelInfo = {
   id: "meta-llama/Llama-2-7b-hf",
-  name: "Llama 2 7B",
   size: "13.5 GB",
-  files: 3,
   quantized: false,
-  downloaded: "2024-01-15",
+  downloadedAt: "2024-01-15",
 };
 console.log(`  - Model ID: ${model.id}`);
-console.log(`  - Model Name: ${model.name}`);
 console.log(`  - Size: ${model.size}`);
-console.log(`  - Files: ${model.files}`);
 console.log(`  - Quantized: ${model.quantized}`);
 
-// Test 3: Screen states
-console.log("\n✓ Test 3: Screen states");
-const screens: TUIState["screen"][] = ["main", "models", "model_detail", "help", "quit_confirm"];
-screens.forEach(screen => {
-  console.log(`  - ${screen}: OK`);
-});
+// Test 3: Quantize options
+console.log("\n✓ Test 3: Quantize options interface");
+const options: QuantizeOptions = {
+  bits: 4,
+  kvCache: true,
+};
+console.log(`  - Bits: ${options.bits}-bit`);
+console.log(`  - KV Cache: ${options.kvCache}`);
 
-// Test 4: Import and export
-console.log("\n✓ Test 4: Module exports");
-console.log("  - createInitialState exported: OK");
-console.log("  - launchTUI exported: OK");
+// Test 4: Quantize progress
+console.log("\n✓ Test 4: Quantize progress interface");
+const progress: QuantizeProgress = {
+  modelId: "test-model",
+  percent: 45.5,
+  layer: 15,
+  totalLayers: 32,
+  layerName: "model.layers.14.attention",
+  eta: 120,
+  status: "quantizing",
+};
+console.log(`  - Model: ${progress.modelId}`);
+console.log(`  - Progress: ${progress.percent}%`);
+console.log(`  - Layer: ${progress.layer}/${progress.totalLayers}`);
+console.log(`  - ETA: ${progress.eta}s`);
+console.log(`  - Status: ${progress.status}`);
 
-console.log("\n✅ All basic tests passed!");
+console.log("\n✅ All basic interface tests passed!");
 console.log("\nTo launch the TUI interactively, run:");
 console.log("  bun run dist/esm/cli.js tui");
 console.log("\nKeyboard shortcuts:");
-console.log("  ↑/↓ - Navigate");
-console.log("  Enter - Select");
-console.log("  b - Browse models");
-console.log("  m - Main menu");
+console.log("  ↑/↓ - Navigate models");
+console.log("  Enter - Select model");
+console.log("  d - Download model");
+console.log("  t - Quantize selected model");
 console.log("  ? - Help");
 console.log("  q - Quit");

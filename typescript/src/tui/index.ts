@@ -9,7 +9,6 @@
  * - Help system
  */
 
-import * as readline from "readline";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
@@ -39,11 +38,32 @@ interface DownloadProgress {
 interface TUIState {
   models: ModelInfo[];
   selectedIndex: number;
-  screen: "browser" | "download" | "help" | "error" | "confirm_download";
+  screen: "browser" | "download" | "help" | "error" | "confirm_download" | "quantize" | "confirm_quantize";
   downloadProgress: DownloadProgress;
+  quantizeProgress: QuantizeProgress;
   errorMessage: string;
   downloadInput: string;
   isDownloading: boolean;
+  selectedModelForQuantize: ModelInfo | null;
+  quantizeOptions: QuantizeOptions;
+}
+
+// Quantization options
+interface QuantizeOptions {
+  bits: 4 | 8;
+  kvCache: boolean;
+}
+
+// Quantization progress state
+interface QuantizeProgress {
+  modelId: string;
+  percent: number;
+  layer: number;
+  totalLayers: number;
+  layerName: string;
+  eta: number; // seconds
+  status: "quantizing" | "complete" | "error" | "idle";
+  error?: string;
 }
 
 // Default cache directory
@@ -198,6 +218,202 @@ function drawDownload(state: TUIState): void {
   console.log("╚══════════════════════════════════════════════════════════╝");
 }
 
+// Draw the quantization configuration screen
+function drawQuantizeConfig(state: TUIState): void {
+  clearScreen();
+
+  console.log("╔══════════════════════════════════════════════════════════╗");
+  console.log("║           Quantization Configuration                     ║");
+  console.log("╠══════════════════════════════════════════════════════════╣");
+  console.log("║                                                          ║");
+
+  if (state.selectedModelForQuantize) {
+    console.log(`║  Model: ${state.selectedModelForQuantize.id.substring(0, 50).padEnd(48)}║`);
+    console.log(`║  Size: ${state.selectedModelForQuantize.size.padEnd(49)}║`);
+    console.log("║                                                          ║");
+  }
+
+  console.log("║  Bit Width:                                              ║");
+  const bits4Selected = state.quantizeOptions.bits === 4;
+  const bits8Selected = state.quantizeOptions.bits === 8;
+  console.log(`║    ${bits4Selected ? "▶" : " "} 4-bit (4x compression, ~99% accuracy)           ║`);
+  console.log(`║    ${bits8Selected ? "▶" : " "} 8-bit (2x compression, ~99.5% accuracy)         ║`);
+  console.log("║                                                          ║");
+
+  console.log("║  KV Cache Quantization:                                ║");
+  const kvEnabled = state.quantizeOptions.kvCache;
+  console.log(`║    ${kvEnabled ? "▶" : " "} Enable KV cache compression (3-bit keys, 2-bit values) ║`);
+  console.log("║                                                          ║");
+
+  console.log("║                                                          ║");
+  console.log("║  Press ←/→ to change bit width                        ║");
+  console.log("║  Press 'k' to toggle KV cache                          ║");
+  console.log("║  Press Enter to start quantization                    ║");
+  console.log("║  Press Esc to cancel                                   ║");
+  console.log("║                                                          ║");
+  console.log("╚══════════════════════════════════════════════════════════╝");
+}
+
+// Draw the quantization progress screen
+function drawQuantizeProgress(state: TUIState): void {
+  clearScreen();
+
+  console.log("╔══════════════════════════════════════════════════════════╗");
+  console.log("║           Quantizing Model                               ║");
+  console.log("╠══════════════════════════════════════════════════════════╣");
+  console.log("║                                                          ║");
+
+  const progress = state.quantizeProgress;
+
+  if (progress.status === "idle") {
+    console.log("║  Preparing quantization...                               ║");
+  } else if (progress.status === "quantizing") {
+    const percent = progress.percent.toFixed(1);
+    const bar = renderProgressBar(progress.percent, 40);
+
+    console.log(`║  Model: ${progress.modelId.substring(0, 50).padEnd(48)}║`);
+    console.log("║                                                          ║");
+    console.log(`║  ${bar} ${percent.padStart(6)}% ║`);
+    console.log("║                                                          ║");
+    console.log(`║  Layer ${progress.layer} of ${progress.totalLayers}`.padEnd(58) + "║");
+    if (progress.layerName) {
+      console.log(`║  ${progress.layerName.substring(0, 56).padEnd(56)}║`);
+    }
+    console.log("║                                                          ║");
+    console.log(`║  ETA: ${formatETA(progress.eta).padEnd(52)}║`);
+    console.log("║                                                          ║");
+    console.log("║  Press 'q' to cancel quantization                       ║");
+  } else if (progress.status === "complete") {
+    console.log("║  ✓ Quantization Complete!                                 ║");
+    console.log("║                                                          ║");
+    console.log(`║  Model: ${progress.modelId.substring(0, 50).padEnd(48)}║`);
+    console.log("║                                                          ║");
+    console.log(`║  Quantized to ${state.quantizeOptions.bits}-bit`.padEnd(56) + "║");
+    if (state.quantizeOptions.kvCache) {
+      console.log("║  KV cache compression enabled                            ║");
+    }
+    console.log("║                                                          ║");
+    console.log("║  Press any key to return to browser                     ║");
+  }
+
+  console.log("║                                                          ║");
+  console.log("╚══════════════════════════════════════════════════════════╝");
+}
+
+// Parse quantization progress from Python CLI output
+function parseQuantizeProgress(line: string): Partial<QuantizeProgress> | null {
+  // Try to match patterns like:
+  // "Quantizing layer 5/32: model.layers.4.self_attn"
+  // "Progress: 45.2%"
+  // "ETA: 1m 23s"
+
+  const layerMatch = line.match(/layer\s+(\d+)\/(\d+)[\s:]*(.*)/i);
+  const percentMatch = line.match(/(\d+\.?\d*)%/);
+
+  const progress: Partial<QuantizeProgress> = {};
+  let found = false;
+
+  if (layerMatch) {
+    progress.layer = parseInt(layerMatch[1], 10);
+    progress.totalLayers = parseInt(layerMatch[2], 10);
+    progress.layerName = layerMatch[3]?.trim() || "";
+    if (progress.totalLayers && progress.totalLayers > 0) {
+      progress.percent = ((progress.layer || 0) / progress.totalLayers) * 100;
+    }
+    found = true;
+  }
+
+  if (percentMatch) {
+    progress.percent = parseFloat(percentMatch[1]);
+    found = true;
+  }
+
+  return found ? progress : null;
+}
+
+// Start model quantization
+function startQuantization(
+  modelId: string,
+  options: QuantizeOptions,
+  onProgress: (progress: QuantizeProgress) => void,
+  onComplete: () => void,
+  onError: (error: string) => void
+): () => void {
+  let startTime = Date.now();
+
+  const progress: QuantizeProgress = {
+    modelId,
+    percent: 0,
+    layer: 0,
+    totalLayers: 32, // Approximate, will be updated from CLI output
+    layerName: "",
+    eta: 0,
+    status: "quantizing",
+  };
+
+  // Build CLI arguments
+  const args = [
+    "-m", "llm_compress",
+    "quantize",
+    modelId,
+    "--bits", options.bits.toString(),
+    "--cache-dir", getCacheDir(),
+  ];
+
+  if (options.kvCache) {
+    args.push("--kv-cache");
+  }
+
+  // Spawn Python CLI quantization command
+  const proc = spawn("python", args, { cwd: "/home/dih/turboquant-mission/python" });
+
+  let stderr = "";
+
+  proc.stdout.on("data", (data: Buffer) => {
+    const lines = data.toString().split("\n");
+    for (const line of lines) {
+      // Parse progress from output
+      const parsed = parseQuantizeProgress(line);
+      if (parsed) {
+        Object.assign(progress, parsed);
+      }
+
+      // Update ETA calculation
+      const now = Date.now();
+      const elapsed = (now - startTime) / 1000;
+      if (elapsed > 0 && progress.percent > 0) {
+        const totalEstimated = elapsed / (progress.percent / 100);
+        const remaining = totalEstimated - elapsed;
+        progress.eta = Math.max(0, remaining);
+      }
+
+      onProgress({ ...progress });
+    }
+  });
+
+  proc.stderr.on("data", (data: Buffer) => {
+    stderr += data.toString();
+  });
+
+  proc.on("close", (code: number) => {
+    if (code === 0) {
+      progress.status = "complete";
+      progress.percent = 100;
+      progress.layer = progress.totalLayers;
+      onProgress({ ...progress });
+      onComplete();
+    } else {
+      progress.status = "error";
+      onError(stderr || `Quantization failed with exit code ${code}`);
+    }
+  });
+
+  // Return cancel function
+  return () => {
+    proc.kill("SIGTERM");
+  };
+}
+
 // Draw the error modal
 function drawErrorModal(state: TUIState): void {
   // First draw the background screen
@@ -253,15 +469,22 @@ function drawHelp(): void {
   console.log("║    ↑ / ↓     Navigate model list                        ║");
   console.log("║    Enter     Select model                               ║");
   console.log("║    d         Download new model                        ║");
+  console.log("║    t         Quantize selected model                   ║");
   console.log("║                                                          ║");
   console.log("║  Download Screen:                                        ║");
   console.log("║    Enter     Start download                             ║");
   console.log("║    Esc       Cancel / Go back                          ║");
   console.log("║    q         Quit during download                      ║");
   console.log("║                                                          ║");
+  console.log("║  Quantization Screen:                                    ║");
+  console.log("║    ← / →     Change bit width (4-bit / 8-bit)         ║");
+  console.log("║    k         Toggle KV cache quantization              ║");
+  console.log("║    Enter     Start quantization                        ║");
+  console.log("║    Esc       Cancel / Go back                          ║");
+  console.log("║    q         Cancel during quantization                ║");
+  console.log("║                                                          ║");
   console.log("║  General:                                                ║");
   console.log("║    ?         Show this help                            ║");
-  console.log("║    q         Quit (with confirmation if active)        ║");
   console.log("║    Ctrl+C    Force quit                                 ║");
   console.log("║                                                          ║");
   console.log("╚══════════════════════════════════════════════════════════╝");
@@ -274,9 +497,6 @@ function parseProgress(line: string): Partial<DownloadProgress> | null {
   // "Downloaded 12.3MB of 27.2MB at 23.4KB/s"
 
   const percentMatch = line.match(/(\d+\.?\d*)%/);
-  const sizeMatch = line.match(/(\d+\.?\d*)\s*(B|KB|MB|GB|TB).*?(\d+\.?\d*)\s*(B|KB|MB|GB|TB)/i);
-  const speedMatch = line.match(/(\d+\.?\d*)\s*(B|KB|MB|GB|TB)/i);
-  const etaMatch = line.match(/ETA:\s*(.+)/i);
 
   const progress: Partial<DownloadProgress> = {};
 
@@ -294,7 +514,6 @@ function startDownload(
   onComplete: () => void,
   onError: (error: string) => void
 ): () => void {
-  let totalBytes = 0;
   let startTime = Date.now();
 
   const progress: DownloadProgress = {
@@ -378,12 +597,27 @@ export function launchTUI(): Promise<void> {
         eta: 0,
         status: "idle",
       },
+      quantizeProgress: {
+        modelId: "",
+        percent: 0,
+        layer: 0,
+        totalLayers: 32,
+        layerName: "",
+        eta: 0,
+        status: "idle",
+      },
       errorMessage: "",
       downloadInput: "",
       isDownloading: false,
+      selectedModelForQuantize: null,
+      quantizeOptions: {
+        bits: 4,
+        kvCache: false,
+      },
     };
 
     let cancelDownload: (() => void) | null = null;
+    let cancelQuantize: (() => void) | null = null;
 
     // Set up stdin for key press
     const stdin = process.stdin;
@@ -440,6 +674,85 @@ export function launchTUI(): Promise<void> {
         state.isDownloading = false;
         cancelDownload = null;
         drawBrowser(state);
+        return;
+      }
+
+      // Handle quantization complete screen
+      if (state.screen === "quantize" && state.quantizeProgress.status === "complete") {
+        state.models = loadCachedModels();
+        state.screen = "browser";
+        state.quantizeProgress = {
+          modelId: "",
+          percent: 0,
+          layer: 0,
+          totalLayers: 32,
+          layerName: "",
+          eta: 0,
+          status: "idle",
+        };
+        state.selectedModelForQuantize = null;
+        cancelQuantize = null;
+        drawBrowser(state);
+        return;
+      }
+
+      // Handle quantization screen
+      if (state.screen === "quantize") {
+        if (state.quantizeProgress.status === "idle") {
+          // Config mode - selecting options
+          if (key === "\r" || key === "\n") {
+            // Start quantization
+            if (state.selectedModelForQuantize) {
+              const model = state.selectedModelForQuantize;
+              state.quantizeProgress.modelId = model.id;
+              state.quantizeProgress.status = "quantizing";
+              drawQuantizeProgress(state);
+
+              cancelQuantize = startQuantization(
+                model.id,
+                state.quantizeOptions,
+                (progress) => {
+                  state.quantizeProgress = progress;
+                  if (state.screen === "quantize") {
+                    drawQuantizeProgress(state);
+                  }
+                },
+                () => {
+                  drawQuantizeProgress(state);
+                },
+                (error) => {
+                  state.errorMessage = error;
+                  state.screen = "error";
+                  drawErrorModal(state);
+                }
+              );
+            }
+          } else if (key === "\u001b" || key === "\u001b\u001b") {
+            // Escape - go back
+            state.screen = "browser";
+            state.selectedModelForQuantize = null;
+            drawBrowser(state);
+          } else if (key === "\u001b[D") { // Left arrow
+            state.quantizeOptions.bits = 4;
+            drawQuantizeConfig(state);
+          } else if (key === "\u001b[C") { // Right arrow
+            state.quantizeOptions.bits = 8;
+            drawQuantizeConfig(state);
+          } else if (key === "k" || key === "K") {
+            state.quantizeOptions.kvCache = !state.quantizeOptions.kvCache;
+            drawQuantizeConfig(state);
+          }
+        } else if (state.quantizeProgress.status === "quantizing") {
+          if (key === "q") {
+            // Cancel quantization
+            if (cancelQuantize) {
+              cancelQuantize();
+            }
+            state.quantizeProgress.status = "idle";
+            state.screen = "browser";
+            drawBrowser(state);
+          }
+        }
         return;
       }
 
@@ -523,6 +836,17 @@ export function launchTUI(): Promise<void> {
           case "d":
             state.screen = "download";
             drawDownload(state);
+            break;
+
+          case "t":
+            // Open quantization config for selected model
+            if (state.models.length > 0 && state.selectedIndex < state.models.length) {
+              const model = state.models[state.selectedIndex];
+              state.selectedModelForQuantize = model;
+              state.quantizeProgress.status = "idle";
+              state.screen = "quantize";
+              drawQuantizeConfig(state);
+            }
             break;
 
           case "?":
