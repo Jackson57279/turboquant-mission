@@ -19,7 +19,6 @@ References:
 
 from __future__ import annotations
 
-import gc
 import json
 import logging
 import threading
@@ -82,7 +81,7 @@ class LayerShardMetadata:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], file_path: str | Path) -> "LayerShardMetadata":
+    def from_dict(cls, data: dict[str, Any], file_path: str | Path) -> LayerShardMetadata:
         """Create from dictionary."""
         meta = cls(
             layer_idx=data["layer_idx"],
@@ -193,7 +192,7 @@ class ModelShardIndex:
             return False
 
     @classmethod
-    def from_sharded_model(cls, model_id: str, shard_dir: str | Path) -> "ModelShardIndex":
+    def from_sharded_model(cls, model_id: str, shard_dir: str | Path) -> ModelShardIndex:
         """Load index from an existing sharded model directory."""
         index = cls(model_id, shard_dir)
         index.load()
@@ -251,7 +250,7 @@ class LayerShardManager:
                 r"decoder\.layers\.(\d+)",
                 r"layers\.(\d+)",
             ]:
-                if any(re.search(pattern, name) for name in state_dict.keys()):
+                if any(re.search(pattern, name) for name in state_dict):
                     layer_pattern = pattern
                     logger.info(f"Detected layer pattern: {pattern}")
                     break
@@ -259,7 +258,7 @@ class LayerShardManager:
         if layer_pattern is None:
             # Fallback: group by common prefix
             layer_pattern = r"^(.*?\.(\d+)\.[^.]+)"
-            logger.info(f"Using fallback layer pattern")
+            logger.info("Using fallback layer pattern")
 
         # Group parameters by layer
         layer_groups: dict[int, dict[str, torch.Tensor]] = {}
@@ -953,9 +952,9 @@ class LayerWiseInferenceEngine:
     def _embed_tokens(self, input_ids: torch.Tensor, embed_weights: dict[str, torch.Tensor]) -> torch.Tensor:
         """Simple token embedding lookup."""
         # Look for weight tensor
-        weight_key = next((k for k in embed_weights.keys() if "weight" in k.lower()), None)
+        weight_key = next((k for k in embed_weights if "weight" in k.lower()), None)
         if weight_key is None:
-            weight_key = list(embed_weights.keys())[0]
+            weight_key = list(embed_weights)[0]
 
         weight = embed_weights[weight_key]
         return torch.nn.functional.embedding(input_ids, weight)
@@ -968,9 +967,9 @@ class LayerWiseInferenceEngine:
     def _apply_lm_head(self, hidden_states: torch.Tensor, lm_head_weights: dict[str, torch.Tensor]) -> torch.Tensor:
         """Apply LM head to get logits."""
         # Simple linear projection
-        weight_key = next((k for k in lm_head_weights.keys() if "weight" in k.lower()), None)
+        weight_key = next((k for k in lm_head_weights if "weight" in k.lower()), None)
         if weight_key is None:
-            weight_key = list(lm_head_weights.keys())[0]
+            weight_key = list(lm_head_weights)[0]
 
         weight = lm_head_weights[weight_key]
         return torch.matmul(hidden_states, weight.t())

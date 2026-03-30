@@ -1,0 +1,61 @@
+{
+  "milestone": "quantization",
+  "round": 2,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 16,
+    "passed": 9,
+    "failed": 7,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-CLI-015",
+    "VAL-QUANT-003",
+    "VAL-QUANT-004",
+    "VAL-QUANT-006",
+    "VAL-QUANT-007",
+    "VAL-QUANT-008",
+    "VAL-QUANT-010",
+    "VAL-QUANT-011",
+    "VAL-QUANT-012"
+  ],
+  "failedAssertions": [
+    {
+      "id": "VAL-CLI-004",
+      "reason": "Quantize command fails due to model directory structure mismatch. quantize_model() expects files in <model_dir>/original/ but download_model() stores directly in <model_dir>/"
+    },
+    {
+      "id": "VAL-CLI-005",
+      "reason": "Blocked by VAL-CLI-004 - same root cause prevents 8-bit quantization from working"
+    },
+    {
+      "id": "VAL-CLI-006",
+      "reason": "Blocked by VAL-CLI-004 - same root cause prevents KV cache quantization from working"
+    },
+    {
+      "id": "VAL-QUANT-001",
+      "reason": "Unit test skipped on Python 3.14 due to bitsandbytes incompatibility. Cannot validate 4-bit weight quantization accuracy."
+    },
+    {
+      "id": "VAL-QUANT-002",
+      "reason": "Unit test skipped on Python 3.14 due to bitsandbytes incompatibility. Cannot validate 8-bit weight quantization accuracy."
+    },
+    {
+      "id": "VAL-QUANT-005",
+      "reason": "Unit test skipped on Python 3.14 due to bitsandbytes incompatibility. Cannot validate block-wise quantization determinism."
+    },
+    {
+      "id": "VAL-QUANT-009",
+      "reason": "Unit test skipped on Python 3.14 due to bitsandbytes incompatibility. Cannot validate quantization round-trip."
+    }
+  ],
+  "blockedAssertions": [],
+  "appliedUpdates": [],
+  "previousRound": ".factory/validation/quantization/user-testing/synthesis.json",
+  "notes": [
+    "No fix commits found since round 1 - re-running validation confirmed same results",
+    "Two distinct root causes for failures:",
+    "  1. Directory structure mismatch in CLI (VAL-CLI-004, 005, 006) - requires code fix",
+    "  2. bitsandbytes Python 3.14 incompatibility (VAL-QUANT-001, 002, 005, 009) - external dependency issue"
+  ]
+}

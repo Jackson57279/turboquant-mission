@@ -1,0 +1,36 @@
+{
+  "assertions": [
+    {
+      "id": "VAL-QUANT-001",
+      "status": "blocked",
+      "evidence": "Unit test test_4bit_accuracy_above_99_percent is skipped on Python 3.14 due to bitsandbytes incompatibility",
+      "error": "bitsandbytes library incompatibility with Python 3.14+ - tests auto-skip"
+    },
+    {
+      "id": "VAL-QUANT-002",
+      "status": "blocked",
+      "evidence": "Unit test test_8bit_quantization_accuracy is skipped on Python 3.14 due to bitsandbytes incompatibility",
+      "error": "bitsandbytes library incompatibility with Python 3.14+ - tests auto-skip"
+    },
+    {
+      "id": "VAL-QUANT-005",
+      "status": "blocked",
+      "evidence": "Unit test test_blockwise_quantization_correctness is skipped on Python 3.14",
+      "error": "bitsandbytes library incompatibility with Python 3.14+ - tests auto-skip"
+    },
+    {
+      "id": "VAL-QUANT-009",
+      "status": "blocked",
+      "evidence": "Unit test test_save_load_roundtrip is skipped on Python 3.14",
+      "error": "bitsandbytes library incompatibility with Python 3.14+ - tests auto-skip"
+    }
+  ],
+  "frictions": [
+    "bitsandbytes library not compatible with Python 3.14, causing all weight quantization tests to be skipped",
+    "No alternative test path exists for validating weight quantization on Python 3.14"
+  ],
+  "blockers": [
+    "External dependency (bitsandbytes) incompatibility with Python 3.14 prevents weight quantization validation"
+  ],
+  "toolsUsed": ["pytest"]
+}

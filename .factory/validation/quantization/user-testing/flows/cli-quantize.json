@@ -1,0 +1,36 @@
+{
+  "assertions": [
+    {
+      "id": "VAL-CLI-004",
+      "status": "fail",
+      "evidence": "Quantize command requires model in 'original' subdirectory but download command stores files directly in model directory. CLI shows error: 'Model sshleifer/tiny-gpt2 not found in cache' even after successful download.",
+      "error": "Mismatch between download storage format and quantize expected format. quantize_model() expects files in <model_dir>/original/ but download_model() stores directly in <model_dir>/"
+    },
+    {
+      "id": "VAL-CLI-005",
+      "status": "blocked",
+      "evidence": "Cannot test 8-bit quantization because 4-bit quantization fails with the same model discovery issue.",
+      "error": "Blocked by VAL-CLI-004 failure - same root cause prevents testing"
+    },
+    {
+      "id": "VAL-CLI-006",
+      "status": "blocked",
+      "evidence": "Cannot test KV cache quantization because base quantization fails.",
+      "error": "Blocked by VAL-CLI-004 failure"
+    },
+    {
+      "id": "VAL-CLI-015",
+      "status": "pass",
+      "evidence": "Tested with 'llm-compress quantize nonexistent/model --bits 4'. Command correctly exits with code 1 and shows error: 'Model nonexistent/model not found in cache. Please download it first with: llm-compress download nonexistent/model'",
+      "error": null
+    }
+  ],
+  "frictions": [
+    "Download and quantize commands use different directory structures for model storage",
+    "No integration test exists for the full download -> quantize workflow"
+  ],
+  "blockers": [
+    "Model directory structure mismatch prevents CLI quantize from working"
+  ],
+  "toolsUsed": ["shell"]
+}
