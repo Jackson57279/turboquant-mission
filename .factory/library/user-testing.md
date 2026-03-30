@@ -221,8 +221,34 @@ For integration tests (if time permits):
 
 ### Setup Requirements
 1. Ensure `llm-compress` CLI is installed (`pip install -e .`)
-2. Use sshleifer/tiny-gpt2 or microsoft/DialoGPT-small as test models
+2. Use TheBloke GGUF models for testing (e.g., TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF)
 3. Ports 3200-3210 are reserved for server testing
+
+### Model Setup for Testing
+
+**For llama.cpp backend testing:**
+The llama.cpp backend requires GGUF format models. Download a pre-converted GGUF model:
+
+```bash
+# Download TheBloke model to temp directory
+python -c "
+from huggingface_hub import hf_hub_download
+model_path = hf_hub_download(
+    repo_id='TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF',
+    filename='tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
+    local_dir='/tmp/gguf_models'
+)
+print(f'Model at: {model_path}')
+"
+
+# Serve with direct GGUF path
+llm-compress serve /tmp/gguf_models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf --backend llama-cpp --port 3208
+```
+
+**Note:** TheBloke GGUF models work well for testing because:
+- They are pre-converted to GGUF format
+- No conversion tools needed
+- Small size (Q4_K_M ~ 600MB) for fast testing
 
 ### Assertion Groups
 
