@@ -192,9 +192,14 @@ function createProgram(): Command {
   program
     .command('tui')
     .description('Launch the terminal user interface')
-    .action(() => {
-      console.log('Launching TUI...');
-      console.log('Note: Full TUI implementation coming in tui-main-interface feature.');
+    .action(async () => {
+      try {
+        const { launchTUI } = await import('./tui/index.js');
+        await launchTUI();
+      } catch (error) {
+        console.error('Error launching TUI:', error);
+        process.exit(1);
+      }
     });
 
   return program;
