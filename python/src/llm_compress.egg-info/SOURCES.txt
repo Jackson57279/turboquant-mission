@@ -23,6 +23,7 @@ src/llm_compress/server/app.py
 src/llm_compress/server/models.py
 tests/test_api_server.py
 tests/test_basic.py
+tests/test_cli_help.py
 tests/test_download.py
 tests/test_kv_cache.py
 tests/test_list_remove.py

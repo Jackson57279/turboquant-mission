@@ -1,6 +1,5 @@
 """Tests for CLI help and version commands."""
 
-import pytest
 from click.testing import CliRunner
 
 from llm_compress import __version__

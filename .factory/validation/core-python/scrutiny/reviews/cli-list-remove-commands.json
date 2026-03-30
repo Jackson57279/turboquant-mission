@@ -1,0 +1,29 @@
+{
+  "featureId": "cli-list-remove-commands",
+  "milestone": "core-python",
+  "overallStatus": "passed",
+  "issues": [],
+  "sharedStateObservations": [
+    {
+      "type": "library",
+      "description": "List command shows table of downloaded models with model ID, size, and file count",
+      "location": "python/src/llm_compress/cli.py:list()"
+    },
+    {
+      "type": "library",
+      "description": "Remove command has --force flag to skip confirmation prompt",
+      "location": "python/src/llm_compress/cli.py:remove() --force"
+    },
+    {
+      "type": "library",
+      "description": "List command shows friendly message when cache is empty with download instructions",
+      "location": "python/src/llm_compress/cli.py:list() empty cache handling"
+    },
+    {
+      "type": "library",
+      "description": "Remove command validates model exists before attempting deletion",
+      "location": "python/src/llm_compress/download.py:remove_cached_model()"
+    }
+  ],
+  "reviewNotes": "List and remove commands are well-implemented. List shows formatted table with model IDs, human-readable sizes, and file counts. Remove supports --force flag for non-interactive usage. Both commands handle empty cache gracefully with helpful messages. Size calculation recursively scans model directories."
+}
