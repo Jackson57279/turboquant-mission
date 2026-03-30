@@ -91,25 +91,5 @@
       "affectedAssertions": ["VAL-API-013"]
     }
   ],
-  "previousRound": null,
-  "roundHistory": [
-    {
-      "round": 1,
-      "status": "fail",
-      "file": ".factory/validation/server/user-testing/synthesis-round1.json",
-      "passed": 7,
-      "failed": 9
-    },
-    {
-      "round": 2,
-      "status": "fail",
-      "file": ".factory/validation/server/user-testing/synthesis-round2.json",
-      "passed": 1,
-      "failed": 8
-    }
-  ],
-  "cumulativeStatus": {
-    "passedAssertions": ["VAL-CLI-007", "VAL-CLI-008", "VAL-CLI-009", "VAL-CLI-010", "VAL-CLI-016", "VAL-API-001", "VAL-API-010", "VAL-API-014"],
-    "failedAssertions": ["VAL-API-002", "VAL-API-003", "VAL-API-004", "VAL-API-005", "VAL-API-006", "VAL-API-007", "VAL-API-012", "VAL-API-013"]
-  }
+  "previousRound": ".factory/validation/server/user-testing/synthesis.json"
 }

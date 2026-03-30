@@ -1,0 +1,152 @@
+{
+  "assertions": [
+    {
+      "id": "VAL-API-002",
+      "description": "Chat completions non-streaming returns complete response",
+      "tool": "curl",
+      "result": {
+        "status": "fail",
+        "reason": "Backend initialization failed: Failed to initialize llama.cpp backend: Could not find or convert model sshleifer/tiny-gpt2. Please provide a direct GGUF file path or install llama.cpp conversion tools. The API correctly accepts the request and validates parameters (returns 422 for invalid JSON, returns 422 for missing messages), but chat completion endpoint returns 503 because the backend cannot load the HuggingFace model without GGUF conversion."
+      },
+      "evidence": {
+        "request": "POST /v1/chat/completions with stream=false, model=sshleifer/tiny-gpt2, messages=[user: Hello], max_tokens=20",
+        "response": {"error":{"message":"Backend initialization failed: Failed to initialize llama.cpp backend: Could not find or convert model sshleifer/tiny-gpt2. Please provide a direct GGUF file path or install llama.cpp conversion tools.","type":"api_error","param":null,"code":"503"}},
+        "httpStatus": 503,
+        "expected": 200 with JSON response containing choices array, message content, finish_reason"
+      },
+      "testDetails": {
+        "modelUsed": "sshleifer/tiny-gpt2",
+        "backend": "llama-cpp",
+        "port": 3200,
+        "issue": "llama.cpp requires GGUF format models. The HuggingFace model needs to be converted first. The vLLM backend is not installed."
+      }
+    },
+    {
+      "id": "VAL-API-003",
+      "description": "Chat completions streaming returns SSE stream",
+      "tool": "curl",
+      "result": {
+        "status": "fail",
+        "reason": "Same backend initialization issue as VAL-API-002. Returns 503 error instead of streaming SSE response."
+      },
+      "evidence": {
+        "request": "POST /v1/chat/completions with stream=true, model=sshleifer/tiny-gpt2, messages=[user: Hi], max_tokens=10",
+        "response": {"error":{"message":"Backend initialization failed: Failed to initialize llama.cpp backend: Could not find or convert model sshleifer/tiny-gpt2. Please provide a direct GGUF file path or install llama.cpp conversion tools.","type":"api_error","param":null,"code":"503"}},
+        "httpStatus": 503,
+        "expected": "200 with content-type text/event-stream and delta chunks"
+      },
+      "testDetails": {
+        "modelUsed": "sshleifer/tiny-gpt2",
+        "backend": "llama-cpp",
+        "port": 3200,
+        "issue": "Backend initialization failure masks streaming functionality"
+      }
+    },
+    {
+      "id": "VAL-API-004",
+      "description": "Chat completions with system message",
+      "tool": "curl",
+      "result": {
+        "status": "fail",
+        "reason": "Backend initialization failure prevents testing system message functionality. Returns 503."
+      },
+      "evidence": {
+        "request": "POST /v1/chat/completions with messages containing system and user roles",
+        "response": {"error":{"message":"Backend initialization failed: Failed to initialize llama.cpp backend: Could not find or convert model sshleifer/tiny-gpt2. Please provide a direct GGUF file path or install llama.cpp conversion tools.","type":"api_error","param":null,"code":"503"}},
+        "httpStatus": 503,
+        "expected": "200 with response incorporating system instruction"
+      },
+      "testDetails": {
+        "modelUsed": "sshleifer/tiny-gpt2",
+        "backend": "llama-cpp",
+        "port": 3200
+      }
+    },
+    {
+      "id": "VAL-API-005",
+      "description": "Chat completions with temperature parameter",
+      "tool": "curl",
+      "result": {
+        "status": "fail",
+        "reason": "Backend initialization failure prevents testing temperature functionality. Returns 503."
+      },
+      "evidence": {
+        "request": "POST /v1/chat/completions with temperature=0.7",
+        "response": {"error":{"message":"Backend initialization failed: vLLM is not installed. Please install vLLM to use this backend.","type":"api_error","param":null,"code":"503"}},
+        "httpStatus": 503,
+        "expected": "200 with response showing variation with different temperatures"
+      },
+      "testDetails": {
+        "modelUsed": "sshleifer/tiny-gpt2",
+        "backend": "vllm (also tested)",
+        "port": 3200,
+        "issue": "vLLM not installed, llama.cpp requires GGUF conversion"
+      }
+    },
+    {
+      "id": "VAL-API-006",
+      "description": "Chat completions with max_tokens parameter",
+      "tool": "curl",
+      "result": {
+        "status": "fail",
+        "reason": "Backend initialization failure prevents testing max_tokens functionality. Returns 503."
+      },
+      "evidence": {
+        "request": "POST /v1/chat/completions with max_tokens=5",
+        "response": {"error":{"message":"Backend initialization failed: vLLM is not installed. Please install vLLM to use this backend.","type":"api_error","param":null,"code":"503"}},
+        "httpStatus": 503,
+        "expected": "200 with response length respecting max_tokens"
+      },
+      "testDetails": {
+        "modelUsed": "sshleifer/tiny-gpt2",
+        "backend": "vllm (also tested)",
+        "port": 3200
+      }
+    },
+    {
+      "id": "VAL-API-007",
+      "description": "Chat completions with stop sequences",
+      "tool": "curl",
+      "result": {
+        "status": "fail",
+        "reason": "Backend initialization failure prevents testing stop sequence functionality. Returns 503."
+      },
+      "evidence": {
+        "request": "POST /v1/chat/completions with stop=['the', 'and']",
+        "response": {"error":{"message":"Backend initialization failed: vLLM is not installed. Please install vLLM to use this backend.","type":"api_error","param":null,"code":"503"}},
+        "httpStatus": 503,
+        "expected": "200 with finish_reason=stop when stop sequence hit"
+      },
+      "testDetails": {
+        "modelUsed": "sshleifer/tiny-gpt2",
+        "backend": "vllm (also tested)",
+        "port": 3200
+      }
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "passed": 0,
+    "failed": 6,
+    "blocked": 0
+  },
+  "frictions": [
+    "Chat completion endpoints properly accept requests and validate parameters (JSON parsing, required fields work correctly)",
+    "Backend initialization issues prevent actual inference testing - llama.cpp requires GGUF conversion, vLLM not installed"
+  ],
+  "blockers": [
+    {
+      "description": "llama.cpp backend cannot load HuggingFace models directly - requires GGUF conversion",
+      "impact": "VAL-API-002 through VAL-API-004",
+      "severity": "high"
+    },
+    {
+      "description": "vLLM not installed in environment",
+      "impact": "VAL-API-005 through VAL-API-007",
+      "severity": "high"
+    }
+  ],
+  "toolsUsed": ["curl"],
+  "testDuration": "3 minutes",
+  "reportedAt": "2026-03-29T22:58:00Z"
+}

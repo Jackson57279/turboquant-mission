@@ -1,0 +1,76 @@
+{
+  "assertions": [
+    {
+      "id": "VAL-API-012",
+      "description": "Invalid model ID returns 404",
+      "tool": "curl",
+      "result": {
+        "status": "fail",
+        "reason": "Returns 503 (Backend initialization failed) instead of 404. The error handler returns backend initialization error before checking if model exists."
+      },
+      "evidence": {
+        "request": "POST /v1/chat/completions with model=non-existent-model-12345",
+        "response": {"error":{"message":"Backend initialization failed: Failed to initialize llama.cpp backend: Could not find or convert model sshleifer/tiny-gpt2. Please provide a direct GGUF file path or install llama.cpp conversion tools.","type":"api_error","param":null,"code":"503"}},
+        "httpStatus": 503,
+        "expected": "404 with error message about model not found"
+      },
+      "testDetails": {
+        "port": 3200,
+        "issue": "Backend initialization errors take precedence over model validation"
+      }
+    },
+    {
+      "id": "VAL-API-013",
+      "description": "Invalid JSON returns 400",
+      "tool": "curl",
+      "result": {
+        "status": "fail",
+        "reason": "Returns 422 (Unprocessable Entity) instead of 400 (Bad Request). FastAPI's default JSON parsing returns 422 for invalid JSON."
+      },
+      "evidence": {
+        "request": "POST /v1/chat/completions with body: {invalid json here}",
+        "response": {"detail":[{"type":"json_invalid","loc":["body",1],"msg":"JSON decode error","input":{},"ctx":{"error":"Expecting property name enclosed in double quotes"}}]},
+        "httpStatus": 422,
+        "expected": "400 with error about invalid JSON"
+      },
+      "testDetails": {
+        "port": 3200,
+        "note": "FastAPI convention is to return 422 for validation errors including JSON parse errors. The contract expects 400. This is a behavior mismatch but follows FastAPI conventions."
+      }
+    },
+    {
+      "id": "VAL-API-014",
+      "description": "Missing required fields returns 422",
+      "tool": "curl",
+      "result": {
+        "status": "pass",
+        "reason": "Returns 422 with detailed validation error about missing 'messages' field."
+      },
+      "evidence": {
+        "request": "POST /v1/chat/completions with body: {\"model\": \"sshleifer/tiny-gpt2\"} (missing messages)",
+        "response": {"detail":[{"type":"missing","loc":["body","messages"],"msg":"Field required","input":{"model":"sshleifer/tiny-gpt2"}}]},
+        "httpStatus": 422,
+        "expected": "422 with error about missing messages field"
+      },
+      "testDetails": {
+        "port": 3200,
+        "validation": "Pydantic validation correctly identifies missing required field"
+      }
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "passed": 1,
+    "failed": 2,
+    "blocked": 0
+  },
+  "frictions": [
+    "Validation error handling is working correctly through FastAPI/Pydantic",
+    "Invalid JSON returns 422 (FastAPI convention) instead of 400 (contract expectation)",
+    "Backend initialization errors mask model validation (returns 503 instead of 404 for invalid model)"
+  ],
+  "blockers": [],
+  "toolsUsed": ["curl"],
+  "testDuration": "2 minutes",
+  "reportedAt": "2026-03-29T22:58:00Z"
+}
