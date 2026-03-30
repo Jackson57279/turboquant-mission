@@ -20,6 +20,8 @@ src/llm_compress/quantization/kv_cache.py
 src/llm_compress/quantization/weight.py
 src/llm_compress/server/__init__.py
 src/llm_compress/server/app.py
+src/llm_compress/server/models.py
+tests/test_api_server.py
 tests/test_basic.py
 tests/test_download.py
 tests/test_kv_cache.py
@@ -27,4 +29,5 @@ tests/test_list_remove.py
 tests/test_llama_cpp_backend.py
 tests/test_quantization.py
 tests/test_quantize.py
+tests/test_serve.py
 tests/test_vllm_backend.py

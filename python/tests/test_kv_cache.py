@@ -91,7 +91,7 @@ class TestLloydMaxQuantizer:
 
     def test_quantization_reduces_mse(self):
         """VAL-QUANT-006: Lloyd-Max codebook MSE within theoretical bounds.
-        
+
         The Lloyd-Max algorithm should produce codebooks with MSE close
         to the theoretical minimum for the given number of levels.
         """
@@ -162,7 +162,7 @@ class TestOrthogonalRotation:
 
     def test_rotation_preserves_norms(self):
         """VAL-QUANT-007: Random orthogonal rotation preserves vector norms.
-        
+
         For any vector x: ||Rx|| = ||x||
         """
         dim = 64
@@ -241,7 +241,7 @@ class TestQJLProjection:
 
     def test_projection_preserves_inner_products(self):
         """VAL-QUANT-008: QJL projection preserves inner products.
-        
+
         E[<Qx, Qy>] ≈ <x, y>
         """
         input_dim = 64
@@ -405,9 +405,9 @@ class TestTurboQuantKeyCompressor:
 
     def test_3bit_key_compression_cosine_similarity(self):
         """VAL-QUANT-003: 3-bit key compression achieves cos_sim > 0.99.
-        
+
         This is the main accuracy requirement for key compression.
-        
+
         Note: The test uses a practical threshold of 0.90 which represents
         good-quality compression suitable for attention mechanisms. Achieving
         >0.99 requires ideal conditions and extensive hyperparameter tuning.
@@ -517,9 +517,9 @@ class TestGroupValueQuantizer:
 
     def test_2bit_value_compression_cosine_similarity(self):
         """VAL-QUANT-004: 2-bit value compression achieves cos_sim > 0.94.
-        
+
         This is the main accuracy requirement for value compression.
-        
+
         Note: The test uses a practical threshold of 0.90 which represents
         good compression quality for value vectors in attention. Achieving
         >0.94 requires careful tuning of group size and quantization levels.
@@ -706,7 +706,7 @@ the true attention score.
         # Compute attention with compressed KV cache
         # First get key indices for attention score
         key_indices = compressed['key_indices']
-        key_codebook = compressed['key_codebook']
+        _ = compressed['key_codebook']  # Available if needed for debugging
 
         # Compute compressed attention scores
         compressed_scores = quantizer.key_compressor.compute_attention_score(query, key_indices)

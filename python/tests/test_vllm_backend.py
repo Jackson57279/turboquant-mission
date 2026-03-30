@@ -241,10 +241,12 @@ class TestVLLMBackend:
     @pytest.fixture
     def mock_vllm_env(self):
         """Fixture to mock vLLM environment."""
-        with patch('llm_compress.backends.vllm.VLLM_AVAILABLE', True):
-            with patch('llm_compress.backends.vllm.LLM') as mock_llm_class:
-                with patch('llm_compress.backends.vllm.SamplingParams') as mock_sampling:
-                    yield mock_llm_class, mock_sampling
+        with (
+            patch('llm_compress.backends.vllm.VLLM_AVAILABLE', True),
+            patch('llm_compress.backends.vllm.LLM') as mock_llm_class,
+            patch('llm_compress.backends.vllm.SamplingParams') as mock_sampling,
+        ):
+            yield mock_llm_class, mock_sampling
 
     def test_backend_initialization(self, mock_vllm_env):
         """Test backend initialization with mocked vLLM."""

@@ -1,17 +1,14 @@
 """Tests for the serve CLI command."""
 from __future__ import annotations
 
-import json
-from pathlib import Path
+from contextlib import suppress
 from unittest.mock import MagicMock, patch
 
-import pytest
 from click.testing import CliRunner
-from fastapi.testclient import TestClient
 
 from llm_compress.cli import main
 from llm_compress.download import save_metadata
-from llm_compress.server.app import _server_state, create_app
+from llm_compress.server.app import _server_state
 
 
 class MockBackend:
@@ -65,10 +62,8 @@ class TestServeCommand:
     def teardown_method(self):
         """Clean up server state after each test."""
         if _server_state["backend"] is not None:
-            try:
+            with suppress(Exception):
                 _server_state["backend"].shutdown()
-            except Exception:
-                pass
         _server_state["backend"] = None
 
     @patch("uvicorn.run")

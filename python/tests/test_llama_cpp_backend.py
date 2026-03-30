@@ -134,9 +134,11 @@ class TestLlamaCppBackend:
     @pytest.fixture
     def mock_llama_cpp_env(self):
         """Fixture to mock llama.cpp environment."""
-        with patch("llm_compress.backends.llama_cpp.LLAMA_CPP_AVAILABLE", True):
-            with patch("llm_compress.backends.llama_cpp.Llama") as mock_llama_class:
-                yield mock_llama_class
+        with (
+            patch("llm_compress.backends.llama_cpp.LLAMA_CPP_AVAILABLE", True),
+            patch("llm_compress.backends.llama_cpp.Llama") as mock_llama_class,
+        ):
+            yield mock_llama_class
 
     def test_backend_initialization_with_gguf_path(self, mock_llama_cpp_env):
         """Test backend initialization with direct GGUF path."""
@@ -168,16 +170,18 @@ class TestLlamaCppBackend:
         mock_llm_instance = MagicMock()
         mock_llama_class.return_value = mock_llm_instance
 
-        with patch("llm_compress.backends.llama_cpp.HF_AVAILABLE", True):
-            with patch.object(GGUFConverter, "find_preconverted_gguf", return_value="/tmp/model.gguf"):
-                backend = LlamaCppBackend(
-                    model_id="microsoft/DialoGPT-medium",
-                    quantization="Q4_K_M",
-                )
-                backend.initialize()
+        with (
+            patch("llm_compress.backends.llama_cpp.HF_AVAILABLE", True),
+            patch.object(GGUFConverter, "find_preconverted_gguf", return_value="/tmp/model.gguf"),
+        ):
+            backend = LlamaCppBackend(
+                model_id="microsoft/DialoGPT-medium",
+                quantization="Q4_K_M",
+            )
+            backend.initialize()
 
-                assert backend._initialized is True
-                assert backend.llm is not None
+            assert backend._initialized is True
+            assert backend.llm is not None
 
     def test_backend_initialization_fails_without_hf(self, mock_llama_cpp_env):
         """Test that initialization fails when HF not available for conversion."""

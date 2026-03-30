@@ -5,6 +5,7 @@ including commands for downloading, quantizing, and serving LLMs.
 """
 
 import logging
+
 import click
 
 from llm_compress import __version__
@@ -225,15 +226,15 @@ def serve(model_id: str, port: int, host: str, backend: str, cache_dir: str | No
         llm-compress serve meta-llama/Llama-2-7b-hf --backend llama-cpp --port 8080
         llm-compress serve my-model --host 0.0.0.0 --port 3200
     """
+
     import uvicorn
-    
-    from llm_compress.download import is_model_cached, get_cache_dir, load_metadata
+
+    from llm_compress.download import get_cache_dir, is_model_cached, load_metadata
     from llm_compress.server.app import create_app
-    from pathlib import Path
 
     # Check if model is downloaded
     is_cached = is_model_cached(model_id, cache_dir=cache_dir)
-    
+
     if not is_cached:
         # Check if it's in default cache location
         click.echo(f"Warning: Model '{model_id}' not found in cache.", err=True)
@@ -242,17 +243,17 @@ def serve(model_id: str, port: int, host: str, backend: str, cache_dir: str | No
         # Check for quantization by looking for quantization metadata
         model_cache_dir = get_cache_dir(cache_dir)
         model_dir = model_cache_dir / model_id.replace("/", "--")
-        
+
         # Check if quantized version exists
         quantized_4bit_dir = model_dir / "quantized-4bit"
         quantized_8bit_dir = model_dir / "quantized-8bit"
-        
+
         is_quantized = quantized_4bit_dir.exists() or quantized_8bit_dir.exists()
-        
+
         # Also check metadata
         metadata = load_metadata(model_id, cache_dir=cache_dir)
         is_quantized = is_quantized or metadata.get("quantized", False)
-        
+
         if not is_quantized:
             click.echo(
                 f"Warning: Model '{model_id}' appears to be unquantized. "

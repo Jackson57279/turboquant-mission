@@ -21,7 +21,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from typing import Any
-from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -761,7 +760,7 @@ class TestCORS:
 
     def test_cors_headers_present_on_get(self, client):
         """Test that CORS headers are present on GET responses."""
-        response = client.get("/health")
+        response = client.get("/health", headers={"Origin": "http://example.com"})
 
         assert response.status_code == 200
         assert "access-control-allow-origin" in response.headers

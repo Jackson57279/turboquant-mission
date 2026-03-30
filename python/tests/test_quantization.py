@@ -122,7 +122,7 @@ class TestRoundtripAccuracy:
 
     def test_4bit_accuracy_above_99_percent(self):
         """VAL-QUANT-001: 4-bit quantized model retains >99% accuracy.
-        
+
         This measures relative error on synthetic data as a proxy for
         perplexity-based accuracy measurement.
         """
@@ -166,7 +166,7 @@ class TestRoundtripAccuracy:
 
     def test_blockwise_quantization_correctness(self):
         """VAL-QUANT-005: Block-wise quantization produces deterministic results.
-        
+
         Same input should produce same output across runs.
         """
         original = torch.randn(512, 512)
