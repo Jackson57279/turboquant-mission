@@ -1,0 +1,39 @@
+{
+  "assertionId": "VAL-API-013",
+  "milestone": "server",
+  "tool": "curl",
+  "status": "failed",
+  "reason": "FastAPI returns 422 for JSON validation errors by convention, but contract expects 400. This is a convention difference, not a functional failure.",
+  "evidence": {
+    "endpoint": "POST /v1/chat/completions",
+    "request": {
+      "body": "{\"model\": \"test\", \"messages\": [{\"role\": \"user\", \"content\": \"hello\"}",
+      "contentType": "application/json"
+    },
+    "response": {
+      "statusCode": 422,
+      "expectedStatusCode": 400,
+      "body": {
+        "detail": [
+          {
+            "type": "json_invalid",
+            "loc": ["body", 67],
+            "msg": "JSON decode error",
+            "input": {},
+            "ctx": {
+              "error": "Expecting ',' delimiter"
+            }
+          }
+        ]
+      }
+    },
+    "serverLog": "/tmp/server_3206.log"
+  },
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["curl", "llm-compress serve"],
+  "notes": "FastAPI/Pydantic returns 422 (Unprocessable Entity) for JSON validation errors. 422 is semantically more correct than 400 (Bad Request) for validation failures. The error message provides detailed JSON decode error location at position 67.",
+  "duration": "5s",
+  "port": 3206,
+  "model": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF"
+}
