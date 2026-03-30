@@ -775,16 +775,16 @@ class TestMemoryEfficiency:
             print(f"Estimated layer size: {estimated_layer_size_gb:.2f} GB/layer")
             print(f"Estimated VRAM usage: {estimated_vram_usage_gb:.2f} GB")
             print(f"Target VRAM limit: {MAX_VRAM_GB} GB")
-            print(f"Memory efficiency: {estimated_vram_usage_gb < MAX_VRAM_GB} (estimated < 4GB)")
+            print(f"Memory efficiency: {estimated_vram_usage_gb <= MAX_VRAM_GB} (estimated <= 4GB)")
             print(f"===========================================================\n")
 
             # With 2 layer cache, GPU should only have 2 layers
             assert stats["gpu_layers_cached"] <= 2
 
-            # The key assertion: estimated VRAM usage should be << 4GB
+            # The key assertion: estimated VRAM usage should be <= 4GB
             # With 2 layers of a 140GB model split across 80 layers:
             # 140GB / 80 * 2 = 3.5GB + overhead (~0.5GB) = ~4GB
-            assert estimated_vram_usage_gb < MAX_VRAM_GB * 2, \
+            assert estimated_vram_usage_gb <= MAX_VRAM_GB + 0.01, \
                 f"Estimated VRAM {estimated_vram_usage_gb:.2f}GB exceeds target {MAX_VRAM_GB}GB"
 
             loader.shutdown()
