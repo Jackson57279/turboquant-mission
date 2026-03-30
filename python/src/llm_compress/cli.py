@@ -4,9 +4,17 @@ This module provides the command-line interface for llm-compress,
 including commands for downloading, quantizing, and serving LLMs.
 """
 
+import logging
 import click
 
 from llm_compress import __version__
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 def _format_size(size_bytes: int) -> str:
@@ -219,10 +227,11 @@ def serve(model_id: str, port: int, host: str, backend: str, cache_dir: str | No
     """
     import uvicorn
     
-    from llm_compress.download import is_model_cached
+    from llm_compress.download import is_model_cached, get_cache_dir, load_metadata
     from llm_compress.server.app import create_app
+    from pathlib import Path
 
-    # Check if model is downloaded (warn if not quantized)
+    # Check if model is downloaded
     is_cached = is_model_cached(model_id, cache_dir=cache_dir)
     
     if not is_cached:
@@ -231,9 +240,30 @@ def serve(model_id: str, port: int, host: str, backend: str, cache_dir: str | No
         click.echo("Attempting to load from HuggingFace Hub...", err=True)
     else:
         # Check for quantization by looking for quantization metadata
-        # For now, show a general warning
-        click.echo(f"Serving model: {model_id}")
-        click.echo(f"Note: If model is not quantized, performance may be reduced.")
+        model_cache_dir = get_cache_dir(cache_dir)
+        model_dir = model_cache_dir / model_id.replace("/", "--")
+        
+        # Check if quantized version exists
+        quantized_4bit_dir = model_dir / "quantized-4bit"
+        quantized_8bit_dir = model_dir / "quantized-8bit"
+        
+        is_quantized = quantized_4bit_dir.exists() or quantized_8bit_dir.exists()
+        
+        # Also check metadata
+        metadata = load_metadata(model_id, cache_dir=cache_dir)
+        is_quantized = is_quantized or metadata.get("quantized", False)
+        
+        if not is_quantized:
+            click.echo(
+                f"Warning: Model '{model_id}' appears to be unquantized. "
+                f"Performance may be reduced. Consider quantizing first:\n"
+                f"  llm-compress quantize {model_id} --bits 4",
+                err=True
+            )
+        else:
+            quantization_info = metadata.get("quantization", {})
+            bits = quantization_info.get("bits", "4")
+            click.echo(f"Serving quantized model: {model_id} ({bits}-bit)")
 
     click.echo(f"Backend: {backend}")
     click.echo(f"Host: {host}")
@@ -243,13 +273,16 @@ def serve(model_id: str, port: int, host: str, backend: str, cache_dir: str | No
 
     # Create the FastAPI app
     try:
+        logger.info(f"Initializing {backend} backend with model {model_id}")
         app = create_app(
             model_id=model_id,
             backend=backend,
             cache_dir=cache_dir,
             enable_kv_compression=kv_cache,
         )
+        logger.info("FastAPI application created successfully")
     except Exception as e:
+        logger.error(f"Failed to create server: {e}")
         raise click.ClickException(f"Failed to create server: {e}")
 
     click.echo(f"Starting API server at http://{host}:{port}")
@@ -273,6 +306,7 @@ def serve(model_id: str, port: int, host: str, backend: str, cache_dir: str | No
     except KeyboardInterrupt:
         click.echo("\nServer stopped.")
     except Exception as e:
+        logger.error(f"Server error: {e}")
         raise click.ClickException(f"Server error: {e}")
 
 
