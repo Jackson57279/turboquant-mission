@@ -1,0 +1,91 @@
+{
+  "name": "llm-compress",
+  "version": "0.1.0",
+  "description": "Unified LLM Quantization & Inference System with TurboQuant and AirLLM - TypeScript implementation",
+  "license": "MIT",
+  "author": "llm-compress Team <team@llm-compress.dev>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/llm-compress/llm-compress.git"
+  },
+  "bugs": {
+    "url": "https://github.com/llm-compress/llm-compress/issues"
+  },
+  "homepage": "https://github.com/llm-compress/llm-compress#readme",
+  "keywords": [
+    "llm",
+    "quantization",
+    "compression",
+    "inference",
+    "turboquant",
+    "airllm",
+    "ai",
+    "machine-learning"
+  ],
+  "engines": {
+    "node": ">=20.0.0",
+    "bun": ">=1.0.0"
+  },
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./cli": {
+      "import": {
+        "types": "./dist/esm/cli.d.ts",
+        "default": "./dist/esm/cli.js"
+      },
+      "require": {
+        "types": "./dist/cjs/cli.d.ts",
+        "default": "./dist/cjs/cli.js"
+      }
+    }
+  },
+  "bin": {
+    "llm-compress": "./dist/cjs/cli.js"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "bun run build:clean && bun run build:esm && bun run build:cjs",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:clean": "rm -rf dist",
+    "dev": "tsc --watch",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist node_modules",
+    "prepublishOnly": "bun run build"
+  },
+  "dependencies": {
+    "commander": "^12.0.0",
+    "axios": "^1.6.0",
+    "@opentui/core": "^0.1.0",
+    "@opentui/react": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "oxlint": "^0.2.0"
+  },
+  "peerDependencies": {
+    "bun": ">=1.0.0"
+  }
+}

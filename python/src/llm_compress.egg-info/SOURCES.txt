@@ -17,6 +17,7 @@ src/llm_compress/backends/registry.py
 src/llm_compress/backends/vllm.py
 src/llm_compress/quantization/__init__.py
 src/llm_compress/quantization/kv_cache.py
+src/llm_compress/quantization/layer_wise.py
 src/llm_compress/quantization/weight.py
 src/llm_compress/server/__init__.py
 src/llm_compress/server/app.py
@@ -26,6 +27,7 @@ tests/test_basic.py
 tests/test_cli_help.py
 tests/test_download.py
 tests/test_kv_cache.py
+tests/test_layer_wise.py
 tests/test_list_remove.py
 tests/test_llama_cpp_backend.py
 tests/test_quantization.py
