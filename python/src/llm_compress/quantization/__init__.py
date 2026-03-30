@@ -16,6 +16,20 @@ from llm_compress.quantization.kv_cache import (
     compute_cosine_similarity,
     estimate_compression_ratio,
 )
+from llm_compress.quantization.layer_wise import (
+    DEFAULT_LAYER_CACHE_SIZE,
+    DEFAULT_PREFETCH_AHEAD,
+    MAX_VRAM_GB,
+    LayerCache,
+    LayerPrefetcher,
+    LayerShardManager,
+    LayerShardMetadata,
+    LayerWiseInferenceEngine,
+    LayerWiseLoader,
+    ModelShardIndex,
+    create_layerwise_loader,
+    shard_model_for_layerwise_loading,
+)
 from llm_compress.quantization.weight import (
     dequantize_model,
     dequantize_tensor,
@@ -48,4 +62,17 @@ __all__ = [
     "GroupValueQuantizer",
     "compute_cosine_similarity",
     "estimate_compression_ratio",
+    # Layer-wise loading
+    "LayerShardMetadata",
+    "ModelShardIndex",
+    "LayerShardManager",
+    "LayerCache",
+    "LayerPrefetcher",
+    "LayerWiseLoader",
+    "LayerWiseInferenceEngine",
+    "shard_model_for_layerwise_loading",
+    "create_layerwise_loader",
+    "DEFAULT_LAYER_CACHE_SIZE",
+    "DEFAULT_PREFETCH_AHEAD",
+    "MAX_VRAM_GB",
 ]

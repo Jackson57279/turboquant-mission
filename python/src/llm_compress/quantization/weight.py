@@ -317,7 +317,8 @@ def quantize_model(
     model_id: str,
     bits: int = 4,
     cache_dir: str | None = None,
-    output_suffix: str | None = None
+    output_suffix: str | None = None,
+    enable_layer_wise: bool = False,
 ) -> Path:
     """Quantize a downloaded HuggingFace model.
 
@@ -328,6 +329,8 @@ def quantize_model(
         bits: Quantization bit width (4 or 8)
         cache_dir: Custom cache directory (default: ~/.cache/llm-compress)
         output_suffix: Suffix for output directory (default: 'quantized-{bits}bit')
+        enable_layer_wise: If True, also create layer-wise sharded version
+            for low-memory inference
 
     Returns:
         Path to the quantized model directory
@@ -377,6 +380,20 @@ def quantize_model(
     # Save quantized model
     save_quantized_model(quantized_data, output_dir, model_id, bits)
 
+    # Create layer-wise shards if requested
+    if enable_layer_wise:
+        from llm_compress.quantization.layer_wise import LayerShardManager
+
+        shard_dir = output_dir / 'shards'
+        shard_manager = LayerShardManager(
+            model_id=model_id,
+            output_dir=output_dir,
+            quantization_bits=bits,
+        )
+        shard_manager.shard_model(state_dict)
+
+        logger.info(f"Layer-wise sharded model created at {shard_dir}")
+
     # Update metadata
     metadata['quantized'] = True
     metadata['quantization'] = {
@@ -384,6 +401,7 @@ def quantize_model(
         'type': 'nf4' if bits == 4 else 'int8',
         'quantized_tensors': len(quantized_data['quantized_tensors']),
         'non_quantized_tensors': len(quantized_data['non_quantized']),
+        'layer_wise_enabled': enable_layer_wise,
     }
     save_metadata(model_id, metadata, cache_dir)
 
