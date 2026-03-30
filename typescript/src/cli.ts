@@ -219,7 +219,12 @@ async function main(): Promise<void> {
 }
 
 // Run CLI if this file is executed directly
-if (require.main === module) {
+// Check for ES module execution context
+const isMainModule = import.meta.url === `file://${process.argv[1]}` ||
+                     process.argv[1]?.endsWith('/cli.js') ||
+                     process.argv[1]?.endsWith('\\cli.js');
+
+if (isMainModule) {
   main();
 }
 

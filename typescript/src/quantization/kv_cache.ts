@@ -523,60 +523,6 @@ export class GroupValueQuantizer {
   }
 
   /**
-   * Get the group size for this quantizer.
-   *
-   * @returns The number of value vectors grouped together
-   */
-  get groupSize(): number {
-    return this._groupSize;
-  }
-
-  /**
-   * Get the group size for this quantizer.
-   *
-   * @returns The number of value vectors grouped together
-   */
-  get groupSize(): number {
-    return this._groupSize;
-  }
-
-  /**
-   * Get the group size for this quantizer.
-   *
-   * @returns The number of value vectors grouped together
-   */
-  get groupSize(): number {
-    return this._groupSize;
-  }
-
-  /**
-   * Get the group size for this quantizer.
-   *
-   * @returns The number of value vectors grouped together
-   */
-  get groupSize(): number {
-    return this._groupSize;
-  }
-
-  /**
-   * Get the group size for this quantizer.
-   *
-   * @returns The number of value vectors grouped together
-   */
-  get groupSize(): number {
-    return this._groupSize;
-  }
-
-  /**
-   * Get the group size for this quantizer.
-   *
-   * @returns The number of value vectors grouped together
-   */
-  get groupSize(): number {
-    return this._groupSize;
-  }
-
-  /**
    * Initialize codebook from training data.
    *
    * @param trainingData - Sample values for training
