@@ -1,0 +1,18 @@
+{
+  "featureId": "tui-server-control",
+  "status": "pass",
+  "summary": "Server control panel for start/stop operations implemented correctly",
+  "issues": [],
+  "sharedStateObservations": [
+    "Server control supports port configuration with arrow keys",
+    "Host toggle between 127.0.0.1 and 0.0.0.0",
+    "Backend selection: vLLM or llama.cpp",
+    "Health check polling via fetch to /health endpoint",
+    "Process management with PID tracking and process group termination",
+    "Shows server URLs (health endpoint and chat completions API) when running"
+  ],
+  "codeQuality": {
+    "stateManagement": "clear stopped/starting/running/error states",
+    "processManagement": "proper spawn and kill handling"
+  }
+}

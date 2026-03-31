@@ -1,0 +1,21 @@
+{
+  "milestone": "tui",
+  "round": 1,
+  "status": "pass",
+  "validatorsRun": {
+    "test": { "passed": true, "command": "cd typescript && bun test tests/tui.test.ts", "exitCode": 0 },
+    "typecheck": { "passed": true, "command": "cd typescript && tsc --noEmit", "exitCode": 0 },
+    "lint": { "passed": true, "command": "cd typescript && oxlint", "exitCode": 0 }
+  },
+  "reviewsSummary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [],
+  "previousRound": null
+}
