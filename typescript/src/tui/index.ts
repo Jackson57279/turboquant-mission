@@ -47,6 +47,22 @@ interface ServerState {
   pid?: number;
 }
 
+// Chat message interface
+interface ChatMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: number;
+}
+
+// Chat session state
+interface ChatSession {
+  messages: ChatMessage[];
+  isLoading: boolean;
+  error?: string;
+  scrollOffset: number; // For scrolling through history
+  inputBuffer: string;
+}
+
 // TUI State
 interface TUIState {
   models: ModelInfo[];
@@ -55,6 +71,7 @@ interface TUIState {
   downloadProgress: DownloadProgress;
   quantizeProgress: QuantizeProgress;
   serverState: ServerState;
+  chatSession: ChatSession;
   errorMessage: string;
   downloadInput: string;
   isDownloading: boolean;
@@ -445,23 +462,153 @@ function drawServerControl(state: TUIState): void {
   console.log("╚══════════════════════════════════════════════════════════╝");
 }
 
-// Draw the chat screen (placeholder)
-function drawChat(_state: TUIState): void {
+// Draw the chat screen with message history and input
+function drawChat(state: TUIState): void {
   clearScreen();
 
-  console.log("╔══════════════════════════════════════════════════════════╗");
-  console.log("╔══════════════════════════════════════════════════════════╗");
-  console.log(
+  const { chatSession } = state;
+  const { messages, isLoading, inputBuffer } = chatSession;
 
   console.log("╔══════════════════════════════════════════════════════════╗");
   console.log("║           Chat Interface                                 ║");
   console.log("╠══════════════════════════════════════════════════════════╣");
+
+  // Calculate available space for messages
+  const headerLines = 3;
+  const footerLines = 5;
+  const availableLines = 20 - headerLines - footerLines;
+
+  // Display chat messages with scrolling
+  if (messages.length === 0) {
+    console.log("║                                                          ║");
+    console.log("║  Start a conversation by typing your message below.      ║");
+    console.log("║                                                          ║");
+  } else {
+    // Get visible messages based on scroll offset
+    const visibleMessages = messages.slice(-availableLines);
+
+    for (const msg of visibleMessages) {
+      const role = msg.role === "user" ? "You" : "Assistant";
+      const prefix = msg.role === "user" ? "▸" : "◂";
+      const lines = msg.content.split("\n");
+
+      // Role header
+      console.log(`║  ${prefix} ${role}:`.padEnd(58) + "║");
+
+      // Message content (wrapped to fit width)
+      for (const line of lines.slice(0, 3)) {
+        const truncated = line.substring(0, 52);
+        console.log(`║     ${truncated}`.padEnd(58) + "║");
+      }
+      if (lines.length > 3) {
+        console.log("║     ...".padEnd(58) + "║");
+      }
+    }
+
+    // Fill remaining space
+    const linesUsed = visibleMessages.reduce((acc, msg) => {
+      const contentLines = Math.min(msg.content.split("\n").length, 3);
+      return acc + 1 + contentLines;
+    }, 0);
+
+    for (let i = linesUsed; i < availableLines; i++) {
+      console.log("║                                                          ║");
+    }
+  }
+
+  // Separator line
+  console.log("╠══════════════════════════════════════════════════════════╣");
+
+  // Input area
+  if (isLoading) {
+    console.log("║  Assistant is thinking...                                ║");
+    console.log("║                                                          ║");
+  } else {
+    console.log("║  Enter your message:                                     ║");
+    console.log(`║  > ${inputBuffer.substring(0, 52).padEnd(52)}║`);
+  }
+
   console.log("║                                                          ║");
-  console.log("║  Chat interface coming soon!                             ║");
-  console.log("║                                                          ║");
-  console.log("║  Press Esc to return to server control                   ║");
-  console.log("║                                                          ║");
+  console.log("║  Enter: Send  |  Esc: Back to server  |  ↑/↓: Scroll   ║");
   console.log("╚══════════════════════════════════════════════════════════╝");
+}
+
+// Send chat message to API
+async function sendChatMessage(
+  messages: ChatMessage[],
+  serverPort: number,
+  onResponse: (content: string) => void,
+  onComplete: () => void,
+  onError: (error: string) => void
+): Promise<() => void> {
+  const controller = new AbortController();
+  const signal = controller.signal;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${serverPort}/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "local-model",
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        stream: true,
+      }),
+      signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API error: ${response.status} - ${errorText}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error("No response body");
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    // Process stream
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6);
+          if (data === "[DONE]") {
+            onComplete();
+            return () => {};
+          }
+          try {
+            const chunk = JSON.parse(data);
+            const content = chunk.choices?.[0]?.delta?.content || "";
+            if (content) {
+              onResponse(content);
+            }
+          } catch {
+            // Ignore parse errors for malformed chunks
+          }
+        }
+      }
+    }
+
+    onComplete();
+  } catch (error) {
+    if (error instanceof Error && error.name !== "AbortError") {
+      onError(error.message);
+    }
+  }
+
+  // Return abort function
+  return () => controller.abort();
 }
 
 // Draw the quantization progress screen
@@ -703,6 +850,13 @@ function drawHelp(): void {
   console.log("║    Esc       Go back to browser                        ║");
   console.log("║    q         Cancel while starting                     ║");
   console.log("║                                                          ║");
+  console.log("║  Chat Interface:                                         ║");
+  console.log("║    Type      Enter message text                        ║");
+  console.log("║    Enter     Send message                               ║");
+  console.log("║    ↑ / ↓     Scroll message history                    ║");
+  console.log("║    Backspace Delete character                          ║");
+  console.log("║    Esc       Return to server control                  ║");
+  console.log("║                                                          ║");
   console.log("║  General:                                                ║");
   console.log("║    ?         Show this help                            ║");
   console.log("║    Ctrl+C    Force quit                                 ║");
@@ -834,6 +988,12 @@ export function launchTUI(): Promise<void> {
         modelId: null,
         status: "stopped",
       },
+      chatSession: {
+        messages: [],
+        isLoading: false,
+        scrollOffset: 0,
+        inputBuffer: "",
+      },
       errorMessage: "",
       downloadInput: "",
       isDownloading: false,
@@ -891,10 +1051,102 @@ export function launchTUI(): Promise<void> {
 
       // Handle chat screen
       if (state.screen === "chat") {
+        const { chatSession, serverState } = state;
+
         if (key === "\u001b" || key === "\u001b\u001b") {
+          // Escape - go back to server control
           state.screen = "server_control";
           drawServerControl(state);
+          return;
         }
+
+        if (chatSession.isLoading) {
+          // Don't accept input while loading
+          return;
+        }
+
+        if (key === "\r" || key === "\n") {
+          // Send message
+          const message = chatSession.inputBuffer.trim();
+          if (message) {
+            // Add user message
+            chatSession.messages.push({
+              role: "user",
+              content: message,
+              timestamp: Date.now(),
+            });
+            chatSession.inputBuffer = "";
+            chatSession.isLoading = true;
+            drawChat(state);
+
+            // Add placeholder for assistant response
+            chatSession.messages.push({
+              role: "assistant",
+              content: "",
+              timestamp: Date.now(),
+            });
+
+            // Send to API
+            sendChatMessage(
+              chatSession.messages,
+              serverState.port,
+              (content) => {
+                // Stream response content
+                const lastMsg = chatSession.messages[chatSession.messages.length - 1];
+                if (lastMsg.role === "assistant") {
+                  lastMsg.content += content;
+                  drawChat(state);
+                }
+              },
+              () => {
+                // Complete
+                chatSession.isLoading = false;
+                drawChat(state);
+              },
+              (error) => {
+                // Error
+                chatSession.isLoading = false;
+                chatSession.error = error;
+                chatSession.messages.pop(); // Remove empty assistant message
+                state.errorMessage = `Chat error: ${error}`;
+                state.screen = "error";
+                drawErrorModal(state);
+              }
+            );
+          }
+          return;
+        }
+
+        if (key === "\u001b[A") {
+          // Up arrow - scroll up in history
+          chatSession.scrollOffset = Math.max(0, chatSession.scrollOffset + 1);
+          drawChat(state);
+          return;
+        }
+
+        if (key === "\u001b[B") {
+          // Down arrow - scroll down in history
+          chatSession.scrollOffset = Math.max(0, chatSession.scrollOffset - 1);
+          drawChat(state);
+          return;
+        }
+
+        if (key === "\u007f") {
+          // Backspace
+          chatSession.inputBuffer = chatSession.inputBuffer.slice(0, -1);
+          drawChat(state);
+          return;
+        }
+
+        if (key >= " " && key <= "~") {
+          // Printable characters
+          if (chatSession.inputBuffer.length < 52) {
+            chatSession.inputBuffer += key;
+            drawChat(state);
+          }
+          return;
+        }
+
         return;
       }
 
