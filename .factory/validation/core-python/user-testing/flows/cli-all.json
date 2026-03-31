@@ -27,7 +27,7 @@
     },
     "VAL-CLI-002": {
       "status": "failed",
-      "cache_dir_used": "/tmp/tmp2ekrsf6z/cache",
+      "cache_dir_used": "/tmp/tmp_q2flzjx/cache",
       "model_path": null
     },
     "VAL-CLI-011-with-model": {
